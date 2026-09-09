@@ -1,0 +1,45 @@
+# Python & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environments & Package Management
+.venv/
+venv/
+env/
+ENV/
+.env
+
+# Tooling & Linters
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*-checkpoint.ipynb
+
+# Project-Specific: Heavy Raw Data & Extraction Artifacts
+# Note: kernel_raw_commits.csv exceeds GitHub's 100 MB file limit (~183 MB).
+# Resampled time series (kernel_daily_ts.csv and kernel_weekly_ts.csv) are tracked.
+Dataset/Extractor/kernel_raw_commits.csv
+Dataset/Extractor/_kernel_ts_chunks/
+_kernel_ts_chunks/
+
+# Model Checkpoints & Weights
+*.pt
+*.pth
+*.h5
+*.keras
+*.ckpt
+
+# OS & Editor Artifacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
