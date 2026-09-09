@@ -4,30 +4,27 @@
 **Institution:** ISEG Executive Education  
 **Instructors:** Prof. Jorge Caiado, Rubens Dias  
 **Group:** 4
-**Members:**
-José Galão
-Raquel Rocha
-Vitor Antunes
+**Members:** José Galão, Raquel Rocha, Vitor Antunes
 
 ---
 
-## ⚡ Quickstart: How to Run the Project
+## Quickstart: How to Run the Project
 
 You can run this project on **both Linux / macOS and Windows**.  
 The recommended runner is [**`uv`**](https://github.com/astral-sh/uv)—it automatically manages Python versions and dependencies inline (PEP 723) without needing manual virtual environments.
 
-> 💡 **Dataset already included:** The processed time series files (`Dataset/kernel_daily_ts.csv` and `Dataset/kernel_weekly_ts.csv`) are already tracked in Git. You **do not** need to clone the ~50 GB Linux repository or extract raw commits to run models.
+> **Dataset already included:** The processed time series files (`Dataset/kernel_daily_ts.csv` and `Dataset/kernel_weekly_ts.csv`) are already tracked in Git. You **do not** need to clone the ~50 GB Linux repository or extract raw commits to run models.
 
 ---
 
 ### Option A: Using `uv` (Recommended — Zero-Config)
 
 #### 1. Install `uv`
-* **🐧 Linux / macOS:**
+* **Linux / macOS:**
   ```bash
   curl -LsSf https://astral.sh/uv/install.sh | sh
   ```
-* **🪟 Windows (PowerShell):**
+* **Windows (PowerShell):**
   ```powershell
   powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
   # Or via winget:
@@ -36,22 +33,22 @@ The recommended runner is [**`uv`**](https://github.com/astral-sh/uv)—it autom
 
 #### 2. Run Modeling & Analysis Scripts Directly
 `uv` automatically resolves all dependencies declared at the top of each script on the fly:
-* **🐧 Linux / macOS:**
+* **Linux / macOS:**
   ```bash
   uv run scripts/01_eda_decomposition.py
   ```
-* **🪟 Windows (PowerShell / Command Prompt):**
+* **Windows (PowerShell / Command Prompt):**
   ```powershell
   uv run scripts\01_eda_decomposition.py
   ```
 
 #### 3. (Optional) Run Fast Dataset Resampling
 If you want to re-generate the daily and weekly CSVs from the local commit cache (~15s):
-* **🐧 Linux / macOS:**
+* **Linux / macOS:**
   ```bash
   uv run Dataset/Extractor/extractor.py
   ```
-* **🪟 Windows:**
+* **Windows:**
   ```powershell
   uv run Dataset\Extractor\extractor.py
   ```
@@ -62,7 +59,7 @@ If you want to re-generate the daily and weekly CSVs from the local commit cache
 
 If you prefer standard Python virtual environments without installing `uv`:
 
-#### 🐧 Linux / macOS
+#### Linux / macOS
 ```bash
 # 1. Create and activate a virtual environment (Python 3.10+)
 python3 -m venv .venv
@@ -76,7 +73,7 @@ pip install pandas numpy statsmodels scipy matplotlib seaborn scikit-learn pmdar
 python scripts/01_eda_decomposition.py
 ```
 
-#### 🪟 Windows (PowerShell / CMD)
+#### Windows (PowerShell / CMD)
 ```powershell
 # 1. Create and activate a virtual environment (Python 3.10+)
 python -m venv .venv
@@ -132,7 +129,6 @@ Rather than utilizing standard financial or macroeconomic toy datasets, this pro
 ├── Docs/                                 # Course syllabus & evaluation requirements
 │   ├── PUC_TimeSeriesForecasting_2026_6Edio.pdf
 │   └── Time Series Forecasting - PT.pdf
-├── GUIA_RELATORIO_E_DIVISAO_TRABALHO.md   # Report guidelines and group work distribution
 ├── notes                                 # Exploration links & references
 └── README.md                             # Project overview & quickstart
 ```
