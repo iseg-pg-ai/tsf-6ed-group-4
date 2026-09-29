@@ -1,0 +1,9 @@
+Frequência,Variável,Código,N,Média,Desvio-Padrão,Mínimo,1º Quartil (Q25),Mediana,3º Quartil (Q75),Máximo,Assimetria (Skewness),Curtose (Kurtosis)
+Semanal (W-MON),Total commits (Y_t),total_commits,1117,1326.88,639.29,74,857.0,1334.0,1771.0,4758,0.248,0.276
+Semanal (W-MON),Non-merge commits,non_merge_commits,1117,1226.66,607.06,67,763.0,1235.0,1647.0,4603,0.328,0.467
+Semanal (W-MON),Commits de merge,merge_commits,1117,100.23,51.16,2,60.0,98.0,134.0,296,0.393,-0.116
+Semanal (W-MON),Contribuidores / Autores únicos (X1),unique_authors,1117,349.63,141.94,26,248.0,359.0,454.0,915,-0.031,-0.381
+Semanal (W-MON),Files changed (X2),files_changed,1117,2797.7,1686.0,119,1718.0,2692.0,3614.0,18085,2.722,19.413
+Semanal (W-MON),Code churn (X3),total_churn,1117,107513.95,217016.56,1260,52427.0,83635.0,124498.0,6760470,26.017,789.616
+Semanal (W-MON),Net code growth (X4),net_code_growth,1117,39229.84,208225.63,-342012,11284.0,24347.0,40976.0,6738516,29.913,958.093
+Diária (D),Total commits diários (Y_t),total_commits,7815,189.65,153.65,0,68.0,155.0,282.0,2829,2.007,15.96

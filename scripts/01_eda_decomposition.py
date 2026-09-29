@@ -38,7 +38,7 @@ from statsmodels.tsa.seasonal import seasonal_decompose
 # 1. Configuração de Caminhos e Ambiente
 # ------------------------------------------------------------------------------
 ROOT_DIR = Path(__file__).resolve().parent.parent
-DATASET_DIR = ROOT_DIR / "Dataset"
+DATASET_DIR = ROOT_DIR / "dataset" if (ROOT_DIR / "dataset").exists() else ROOT_DIR / "Dataset"
 OUTPUT_DIR = ROOT_DIR / "output"
 IMAGES_DIR = OUTPUT_DIR / "images"
 PNG_DIR = IMAGES_DIR / "png"

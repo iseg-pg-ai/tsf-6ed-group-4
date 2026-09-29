@@ -1,0 +1,5 @@
+Série,Ordem de Diferenciação,Estatística ADF,p-value,Valor Crítico (1%),Valor Crítico (5%),Valor Crítico (10%),Lags Utilizados,Observações,Estacionária?
+Série em Níveis Y_t,"Nenhuma (d=0, D=0)",-1.9514,0.3083,-3.4379,-2.8649,-2.5685,18,874,Não (p >= 0.05)
+Primeira Diferença Simples,"Simples (d=1, D=0)",-15.083,8.4021e-28,-3.4379,-2.8649,-2.5685,17,874,Sim (p < 0.05)
+Diferença Sazonal (s=52),"Sazonal (d=0, D=1)",-4.0808,0.0010,-3.4383,-2.8651,-2.5686,19,821,Sim (p < 0.05)
+Diferenças Sazonal e Simples,"Combinada (d=1, D=1)",-15.989,6.7040e-29,-3.4383,-2.8651,-2.5686,17,822,Sim (p < 0.05)

@@ -28,7 +28,6 @@ htmlcov/
 Dataset/Extractor/kernel_raw_commits.csv
 Dataset/Extractor/_kernel_ts_chunks/
 _kernel_ts_chunks/
-output/*
 /dataset
 
 # Model Checkpoints & Weights

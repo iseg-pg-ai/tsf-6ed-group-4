@@ -1,0 +1,9 @@
+Modelo,Família,Ordem / Parâmetros,AIC,BIC,REQM,EAM,EPAM (%),EPAMs (%)
+"ARIMAX(0, 1, 2) + Covariáveis",ARIMAX Multivariado,"(0, 1, 2)",11589.33,11613.28,263.24,171.04,10.76,11.11
+"ARIMAX(1, 1, 1) + Covariáveis",ARIMAX Multivariado,"(1, 1, 1)",11603.71,11627.67,263.39,171.14,10.76,11.1
+"SARIMAX(0, 1, 2) + Covariáveis + Fourier",ARIMAX Multivariado,"(0, 1, 2)",11594.36,11637.47,263.51,172.3,10.79,11.1
+"ARIMA(0, 1, 2) Univariado",ARIMA Univariado,"(0, 1, 2)",13359.32,13373.69,614.75,485.02,36.78,30.07
+"ARIMA(1, 1, 1) Univariado",ARIMA Univariado,"(1, 1, 1)",13385.35,13399.73,615.12,485.35,36.77,30.09
+Holt Linear,Alisamento Exponencial,"alpha=0.0138, beta=0.0083",11051.82,11070.99,618.21,486.28,38.86,30.04
+Holt-Winters Aditivo (s=52),Alisamento Exponencial,"alpha=0.0141, beta=0.0, gamma=0.1494",11227.09,11495.59,643.53,510.5,41.81,31.14
+Holt-Winters Multiplicativo (s=52),Alisamento Exponencial,"alpha=0.0, beta=0.0, gamma=0.0826",11266.0,11534.49,663.81,519.43,42.84,31.47
