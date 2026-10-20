@@ -4,11 +4,14 @@
 
 ---
 
-## 1. Dados e Higienização Técnica (Capítulo 2)
+## 1. Dados, Higienização e Matriz de Correlação (Capítulo 2)
 * **Frequência Semanal (`W-MON`):** 1117 observações validadas (Abril de 2005 a Setembro de 2026).
 * **Truncatura da Cauda:** A última linha (`2026-09-14`) foi removida por corresponder ao fecho a meio da semana da recolha Git (apenas 2 commits registados), prevenindo colapso artificial nas previsões fora da amostra (*out-of-sample*).
 * **Ponto Singular Inicial (Abril de 2005):** O primeiro registo contém 6.749.493 linhas de inserção num único commit de Linus Torvalds (importação fundacional da árvore). O volume de commits (`total_commits = 259`) é válido, mas o code churn exige escala logarítmica ou tratamento de alavancagem.
-* **Tabela de Variáveis:** Inserir `tab_01_variaveis.csv` no Capítulo 2 para apresentar a média, mediana, assimetria e curtose das variáveis candidatas.
+* **Análise da Matriz de Correlação (`fig_00_matriz_correlacao.[png|svg]` e `tab_00_matriz_correlacao.csv`):**
+  * **Identidades Contabilísticas a Excluir das Exógenas:** `non_merge_commits` apresenta correlação de $r = 0.998$ com `total_commits` ($\text{total\_commits} = \text{non\_merge\_commits} + \text{merge\_commits}$). Do mesmo modo, `insertions` tem correlação de $r = 0.939$ com `total_churn` ($\text{ins} + \text{del}$). Incluir estas parcelas em simultâneo geraria multicolinearidade severa ou tautologia contabilística.
+  * **Colinearidade vs. Ortogonalidade nas Candidatas Exógenas:** `unique_authors` apresenta uma correlação forte com `total_commits` ($r = 0.934$ em níveis; $r = 0.898$ em primeiras diferenças), refletindo que o volume de commits escala diretamente com o número de contribuidores ativos na semana. Em contrapartida, `total_churn` ($r = 0.587$), `insertions` ($r = 0.560$), `deletions` ($r = 0.431$) e `net_code_growth` ($r = 0.379$) apresentam correlações moderadas com `total_commits` e baixa colinearidade com `unique_authors` ($r = 0.452$), fornecendo informação estrutural genuinamente ortogonal sobre a dimensão e complexidade das alterações.
+* **Tabelas de Variáveis:** Inserir `tab_00_matriz_correlacao.csv` e `tab_01_variaveis.csv` no Capítulo 2.
 
 ---
 
@@ -34,5 +37,6 @@
 ---
 
 ## 4. Imagens a Incluir no Documento (disponíveis em `output/images/png/` e `output/images/svg/`)
+0. **`fig_00_matriz_correlacao.[png|svg]`:** Inserir no Capítulo 2 como Figura 0 (Matriz de correlação de Pearson e Spearman entre todas as 9 variáveis do dataset, justificando a seleção de variáveis exógenas e a exclusão de variáveis tautológicas).
 1. **`fig_01_cronogramas_base.[png|svg]`:** Inserir no Capítulo 2 como Figura 1 (Cronogramas em níveis, crescimento de contribuidores, escala logarítmica de code churn e micro-sazonalidade semanal diária).
 2. **`fig_02_decomposicao_adit_mult.[png|svg]`:** Inserir no Capítulo 3 como Figura 2 (Painel quádruplo comparando aditivo vs multiplicativo e assinalando os pontos vermelhos de resíduos que ultrapassam $2\sigma$).

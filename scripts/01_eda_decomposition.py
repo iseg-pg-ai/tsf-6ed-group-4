@@ -30,8 +30,10 @@ from pathlib import Path
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from scipy import stats
+import seaborn as sns
 from statsmodels.tsa.seasonal import seasonal_decompose
 
 # ------------------------------------------------------------------------------
@@ -122,7 +124,160 @@ def carregar_dados() -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 # ------------------------------------------------------------------------------
-# 2. Geração da Tabela de Estatísticas Descritivas (tab_01_variaveis.csv)
+# 2. Matriz de Correlação entre Variáveis (fig_00 e tab_00)
+# ------------------------------------------------------------------------------
+def gerar_matriz_correlacao(df_w: pd.DataFrame) -> tuple[pd.DataFrame, Path]:
+    """Gera a Figura 0 (Matriz de Correlação) e a Tabela 0 abrangendo todas as
+
+    variáveis numéricas documentadas em dataset/dataset_fields_description.md:
+    - total_commits, non_merge_commits, merge_commits, unique_authors,
+      files_changed, insertions, deletions, total_churn, net_code_growth.
+
+    Compara:
+    (a) Correlação Linear de Pearson (s/ o outlier de importação inicial de 2005-04-18)
+    (b) Correlação de Ordem de Spearman (amostra completa, robusta a outliers)
+    E analisa a colinearidade com a variável dependente (total_commits) e entre
+    variáveis candidatas a exógenas.
+    """
+    print("[*] A gerar Matriz de Correlação entre variáveis (fig_00 e tab_00)...")
+
+    colunas = [
+        "total_commits",
+        "non_merge_commits",
+        "merge_commits",
+        "unique_authors",
+        "files_changed",
+        "insertions",
+        "deletions",
+        "total_churn",
+        "net_code_growth",
+    ]
+
+    rotulos_curtos = [
+        "total_commits (Y_t)",
+        "non_merge_commits",
+        "merge_commits",
+        "unique_authors",
+        "files_changed",
+        "insertions",
+        "deletions",
+        "total_churn",
+        "net_code_growth",
+    ]
+
+    # 1. Cálculos de correlação
+    corr_pearson_all = df_w[colunas].corr(method="pearson")
+    # Excluir a 1ª semana (import inicial de 6.75M linhas) para não distorcer linearmente o code churn
+    corr_pearson_clean = df_w.iloc[1:][colunas].corr(method="pearson")
+    # Correlação em primeiras diferenças (d=1, sem o ponto inicial)
+    corr_diff_clean = df_w.iloc[1:][colunas].diff().dropna().corr(method="pearson")
+    # Correlação de postos de Spearman (amostra total)
+    corr_spearman = df_w[colunas].corr(method="spearman")
+
+    # Diagnóstico de colinearidade e adequação como variável exógena
+    diagnosticos = {
+        "total_commits": "Variavel Dependente / Alvo (Y_t)",
+        "non_merge_commits": "Identidade Contabilistica (r=0.998 com Y_t) — Excluir das exogenas",
+        "merge_commits": "Componente direta da soma de Y_t (r=0.653) — Evitar por endogeneidade",
+        "unique_authors": "Correlacao muito elevada com Y_t (r=0.934, d1=0.898) — Risco de simultaneidade",
+        "files_changed": "Correlacao elevada com Y_t (r=0.823, d1=0.762) — Proxy de escopo arquitetural",
+        "insertions": "Correlacao moderada com Y_t (r=0.560) mas colinear com total_churn (r=0.939)",
+        "deletions": "Correlacao moderada com Y_t (r=0.431) — Indicador de refatoracao/limpeza",
+        "total_churn": "Correlacao moderada com Y_t (r=0.587, d1=0.549) — Excelente exogena ortogonal",
+        "net_code_growth": "Correlacao baixa/moderada com Y_t (r=0.379, d1=0.284) — Informacao complementar",
+    }
+
+    registos_corr = []
+    for col in colunas:
+        linha = {
+            "Variavel": col,
+            "r_Pearson_com_Yt_Sem_Outlier2005": round(corr_pearson_clean.loc[col, "total_commits"], 3),
+            "r_Pearson_com_Yt_Primeiras_Diferencas": round(corr_diff_clean.loc[col, "total_commits"], 3),
+            "rho_Spearman_com_Yt": round(corr_spearman.loc[col, "total_commits"], 3),
+            "r_Pearson_com_Yt_Bruto_Com_2005": round(corr_pearson_all.loc[col, "total_commits"], 3),
+            "Avaliacao_Como_Exogena": diagnosticos[col],
+        }
+        for col_dest in colunas:
+            linha[f"corr_{col_dest}"] = round(corr_pearson_clean.loc[col, col_dest], 3)
+        registos_corr.append(linha)
+
+    df_tab0 = pd.DataFrame(registos_corr)
+    caminho_tab0 = TABLES_DIR / "tab_00_matriz_correlacao.csv"
+    df_tab0.to_csv(caminho_tab0, index=False)
+    print(f"    -> Tabela de correlações gravada com sucesso em: {caminho_tab0}")
+
+    # 2. Construção da Figura 0 (Painel duplo: Pearson s/ outlier 2005 vs. Spearman)
+    fig, axes = plt.subplots(1, 2, figsize=(16, 7.5))
+    fig.suptitle(
+        "Figura 0: Matriz de Correlação entre Todas as Variáveis do Dataset (2005–2026)\n"
+        "Investigação de Colinearidade, Identidades Contabilísticas e Seleção de Variáveis Exógenas\n"
+        "ISEG — Time Series Forecasting — Análise Preliminar de Variáveis (dataset_fields_description.md)",
+        fontsize=12,
+        fontweight="bold",
+        y=1.01,
+    )
+
+    # Máscara opcional ou matriz completa anotada (matriz completa facilita leitura cruzada)
+    # Painel (a): Pearson s/ commit inaugural de 2005
+    sns.heatmap(
+        corr_pearson_clean.values,
+        ax=axes[0],
+        cmap="RdBu_r",
+        vmin=-0.2,
+        vmax=1.0,
+        center=0.4,
+        annot=True,
+        fmt=".2f",
+        annot_kws={"size": 8.5, "weight": "bold"},
+        xticklabels=rotulos_curtos,
+        yticklabels=rotulos_curtos,
+        cbar_kws={"label": "Coeficiente de Correlação de Pearson (r)", "shrink": 0.82},
+        linewidths=0.6,
+        linecolor="white",
+    )
+    axes[0].set_title(
+        "(a) Correlação Linear de Pearson (r)\n(Regime normal de operação, s/ outlier inaugural de 2005-04-18)",
+        loc="left",
+        fontweight="bold",
+        fontsize=10.5,
+    )
+    axes[0].tick_params(axis="x", rotation=35)
+    axes[0].tick_params(axis="y", rotation=0)
+
+    # Painel (b): Spearman (Ordem / Postos)
+    sns.heatmap(
+        corr_spearman.values,
+        ax=axes[1],
+        cmap="RdBu_r",
+        vmin=-0.2,
+        vmax=1.0,
+        center=0.4,
+        annot=True,
+        fmt=".2f",
+        annot_kws={"size": 8.5, "weight": "bold"},
+        xticklabels=rotulos_curtos,
+        yticklabels=rotulos_curtos,
+        cbar_kws={"label": r"Coeficiente de Correlação de Spearman ($\rho$)", "shrink": 0.82},
+        linewidths=0.6,
+        linecolor="white",
+    )
+    axes[1].set_title(
+        r"(b) Correlação de Postos de Spearman ($\rho$)" + "\n(Amostra completa N=1117 semanas, robusta a outliers)",
+        loc="left",
+        fontweight="bold",
+        fontsize=10.5,
+    )
+    axes[1].tick_params(axis="x", rotation=35)
+    axes[1].tick_params(axis="y", rotation=0)
+
+    plt.tight_layout()
+    caminho_png, _ = guardar_figura(fig, "fig_00_matriz_correlacao")
+
+    return df_tab0, caminho_png
+
+
+# ------------------------------------------------------------------------------
+# 3. Geração da Tabela de Estatísticas Descritivas (tab_01_variaveis.csv)
 # ------------------------------------------------------------------------------
 def gerar_estatisticas_descritivas(df_w: pd.DataFrame, df_d: pd.DataFrame) -> pd.DataFrame:
     """Calcula estatísticas sumárias formais para ambas as frequências.
@@ -138,6 +293,8 @@ def gerar_estatisticas_descritivas(df_w: pd.DataFrame, df_d: pd.DataFrame) -> pd
         ("merge_commits", "Commits de merge"),
         ("unique_authors", "Contribuidores / Autores únicos (X1)"),
         ("files_changed", "Files changed (X2)"),
+        ("insertions", "Insertions (+)"),
+        ("deletions", "Deletions (-)"),
         ("total_churn", "Code churn (X3)"),
         ("net_code_growth", "Net code growth (X4)"),
     ]
@@ -620,11 +777,14 @@ def exportar_resumo_eda(metricas: dict, df_outliers: pd.DataFrame) -> Path:
 
 ---
 
-## 1. Dados e Higienização Técnica (Capítulo 2)
+## 1. Dados, Higienização e Matriz de Correlação (Capítulo 2)
 * **Frequência Semanal (`W-MON`):** {metricas["N_observacoes"]} observações validadas (Abril de 2005 a Setembro de 2026).
 * **Truncatura da Cauda:** A última linha (`2026-09-14`) foi removida por corresponder ao fecho a meio da semana da recolha Git (apenas 2 commits registados), prevenindo colapso artificial nas previsões fora da amostra (*out-of-sample*).
 * **Ponto Singular Inicial (Abril de 2005):** O primeiro registo contém 6.749.493 linhas de inserção num único commit de Linus Torvalds (importação fundacional da árvore). O volume de commits (`total_commits = 259`) é válido, mas o code churn exige escala logarítmica ou tratamento de alavancagem.
-* **Tabela de Variáveis:** Inserir `tab_01_variaveis.csv` no Capítulo 2 para apresentar a média, mediana, assimetria e curtose das variáveis candidatas.
+* **Análise da Matriz de Correlação (`fig_00_matriz_correlacao.[png|svg]` e `tab_00_matriz_correlacao.csv`):**
+  * **Identidades Contabilísticas a Excluir das Exógenas:** `non_merge_commits` apresenta correlação de $r = 0.998$ com `total_commits` ($\\text{{total\\_commits}} = \\text{{non\\_merge\\_commits}} + \\text{{merge\\_commits}}$). Do mesmo modo, `insertions` tem correlação de $r = 0.939$ com `total_churn` ($\\text{{ins}} + \\text{{del}}$). Incluir estas parcelas em simultâneo geraria multicolinearidade severa ou tautologia contabilística.
+  * **Colinearidade vs. Ortogonalidade nas Candidatas Exógenas:** `unique_authors` apresenta uma correlação forte com `total_commits` ($r = 0.934$ em níveis; $r = 0.898$ em primeiras diferenças), refletindo que o volume de commits escala diretamente com o número de contribuidores ativos na semana. Em contrapartida, `total_churn` ($r = 0.587$), `insertions` ($r = 0.560$), `deletions` ($r = 0.431$) e `net_code_growth` ($r = 0.379$) apresentam correlações moderadas com `total_commits` e baixa colinearidade com `unique_authors` ($r = 0.452$), fornecendo informação estrutural genuinamente ortogonal sobre a dimensão e complexidade das alterações.
+* **Tabelas de Variáveis:** Inserir `tab_00_matriz_correlacao.csv` e `tab_01_variaveis.csv` no Capítulo 2.
 
 ---
 
@@ -650,6 +810,7 @@ def exportar_resumo_eda(metricas: dict, df_outliers: pd.DataFrame) -> Path:
 ---
 
 ## 4. Imagens a Incluir no Documento (disponíveis em `output/images/png/` e `output/images/svg/`)
+0. **`fig_00_matriz_correlacao.[png|svg]`:** Inserir no Capítulo 2 como Figura 0 (Matriz de correlação de Pearson e Spearman entre todas as 9 variáveis do dataset, justificando a seleção de variáveis exógenas e a exclusão de variáveis tautológicas).
 1. **`fig_01_cronogramas_base.[png|svg]`:** Inserir no Capítulo 2 como Figura 1 (Cronogramas em níveis, crescimento de contribuidores, escala logarítmica de code churn e micro-sazonalidade semanal diária).
 2. **`fig_02_decomposicao_adit_mult.[png|svg]`:** Inserir no Capítulo 3 como Figura 2 (Painel quádruplo comparando aditivo vs multiplicativo e assinalando os pontos vermelhos de resíduos que ultrapassam $2\\sigma$).
 """
@@ -672,20 +833,23 @@ def main():
     # 1. Carregar Dados
     df_w, df_d = carregar_dados()
 
-    # 2. Estatísticas Descritivas (tab_01)
+    # 2. Matriz de Correlação (fig_00, tab_00)
+    gerar_matriz_correlacao(df_w)
+
+    # 3. Estatísticas Descritivas (tab_01)
     gerar_estatisticas_descritivas(df_w, df_d)
 
-    # 3. Cronogramas (fig_01)
+    # 4. Cronogramas (fig_01)
     criar_cronogramas(df_w, df_d)
 
-    # 4. Decomposição e Outliers (tab_02, fig_02)
+    # 5. Decomposição e Outliers (tab_02, fig_02)
     df_outliers, _, metricas = executar_decomposicoes_e_outliers(df_w)
 
-    # 5. Exportar Resumo Markdown para o Relatório
+    # 6. Exportar Resumo Markdown para o Relatório
     exportar_resumo_eda(metricas, df_outliers)
 
     print("=" * 80)
-    print("[✓] SCRIPT 01 CONCLUÍDO COM SUCESSO!")
+    print("[OK] SCRIPT 01 CONCLUÍDO COM SUCESSO!")
     print(f"    Ficheiros gerados em: {OUTPUT_DIR.resolve()}")
     print("=" * 80)
 

@@ -434,9 +434,13 @@ def modelar_arima_arimax(
     n_passos = len(test)
 
     # Conjuntos de variáveis exógenas
+    exog_churn_only = ["log_churn"]
     exog_cols = ["unique_authors", "log_churn"]
     fourier_cols = ["sin_52_1", "cos_52_1", "sin_52_2", "cos_52_2"]
     exog_fourier_cols = exog_cols + fourier_cols
+
+    X_train_churn = train[exog_churn_only]
+    X_test_churn = test[exog_churn_only]
 
     X_train_base = train[exog_cols]
     X_test_base = test[exog_cols]
@@ -448,6 +452,14 @@ def modelar_arima_arimax(
         # Modelos Univariados
         ("ARIMA(0, 1, 2) Univariado", (0, 1, 2), None, None, None),
         ("ARIMA(1, 1, 1) Univariado", (1, 1, 1), None, None, None),
+        # Modelo ARIMAX apenas com Exógena de Correlação Moderada (Code Churn, r=0.587)
+        (
+            "ARIMAX(0, 1, 2) + Code Churn (s/ Contribuidores)",
+            (0, 1, 2),
+            X_train_churn,
+            X_test_churn,
+            exog_churn_only,
+        ),
         # Modelos Multivariados ARIMAX com Covariáveis de Engenharia
         (
             "ARIMAX(0, 1, 2) + Covariáveis",
@@ -1072,7 +1084,7 @@ def main():
     )
 
     print("=" * 80)
-    print("[✓] SCRIPT 02 CONCLUÍDO COM SUCESSO!")
+    print("[OK] SCRIPT 02 CONCLUÍDO COM SUCESSO!")
     print(f"    Ficheiros gerados em: {OUTPUT_DIR.resolve()}")
     print("=" * 80)
 
