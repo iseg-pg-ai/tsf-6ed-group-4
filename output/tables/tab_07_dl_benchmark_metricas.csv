@@ -1,0 +1,9 @@
+Modelo,Regime,REQM,EAM,EPAM,EPAMs
+1D-CNN Univariado,Univariado (F=1),139.8,84.29,63.51,40.02
+SimpleRNN Univariado,Univariado (F=1),141.96,91.57,73.3,43.68
+LSTM Univariado,Univariado (F=1),164.47,118.71,133.51,55.4
+GRU Univariado,Univariado (F=1),141.74,90.29,76.17,45.4
+1D-CNN Multivariado,Multivariado (F=6),132.33,76.67,53.95,35.7
+SimpleRNN Multivariado,Multivariado (F=6),135.61,86.07,67.73,44.18
+LSTM Multivariado,Multivariado (F=6),130.22,79.22,60.99,37.03
+GRU Multivariado,Multivariado (F=6),132.23,79.31,55.44,37.69

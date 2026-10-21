@@ -32,17 +32,17 @@
   * Codificação harmónica do dia da semana ($\sin$ e $\cos$ do ciclo $s=7$)
 
 ### Comparação Univariado vs. Multivariado (REQM):
-  * **1D-CNN:** Univariado REQM=144.25 (EPAM=60.73%) vs. Multivariado REQM=131.18 (EPAM=65.29%) -> Ganho de +9.1%
-  * **SimpleRNN:** Univariado REQM=142.20 (EPAM=73.78%) vs. Multivariado REQM=136.33 (EPAM=66.60%) -> Ganho de +4.1%
-  * **LSTM:** Univariado REQM=164.36 (EPAM=132.17%) vs. Multivariado REQM=130.38 (EPAM=60.91%) -> Ganho de +20.7%
-  * **GRU:** Univariado REQM=141.47 (EPAM=78.62%) vs. Multivariado REQM=132.65 (EPAM=54.07%) -> Ganho de +6.2%
+  * **1D-CNN:** Univariado REQM=139.80 (EPAM=63.51%) vs. Multivariado REQM=132.33 (EPAM=53.95%) -> Ganho de +5.3%
+  * **SimpleRNN:** Univariado REQM=141.96 (EPAM=73.30%) vs. Multivariado REQM=135.61 (EPAM=67.73%) -> Ganho de +4.5%
+  * **LSTM:** Univariado REQM=164.47 (EPAM=133.51%) vs. Multivariado REQM=130.22 (EPAM=60.99%) -> Ganho de +20.8%
+  * **GRU:** Univariado REQM=141.74 (EPAM=76.17%) vs. Multivariado REQM=132.23 (EPAM=55.44%) -> Ganho de +6.7%
 
-* **Melhor Modelo Global:** **LSTM Multivariado** com REQM = 130.38 e EPAM = 60.91%.
+* **Melhor Modelo Global:** **LSTM Multivariado** com REQM = 130.22 e EPAM = 60.99%.
 * **Interpretação (Slide 94 e 111):** As redes recorrentes (LSTM e GRU) beneficiam significativamente da informação multivariada, capturando não-linearidades nas interações entre volume de commits, disponibilidade de contribuidores e volatilidade de código.
 
 ---
 
-## 4. Tabela de Benchmark (tab_06_dl_benchmark_metricas.csv)
+## 4. Tabela de Benchmark (tab_07_dl_benchmark_metricas.csv)
 * **Métricas Reportadas (Slide 13):**
   * **REQM** (Raiz do Erro Quadrático Médio / RMSE)
   * **EAM** (Erro Absoluto Médio / MAE)
@@ -53,8 +53,8 @@
 ---
 
 ## 5. Imagens a Incluir no Documento
-1. **`fig_05_curvas_aprendizagem.[png|svg]`:** Inserir no Capítulo 5 (Curvas de perda de treino e validação para as 4 arquiteturas em ambos os regimes).
-2. **`fig_06_previsoes_dl_teste.[png|svg]`:** Inserir no Capítulo 5/6 (Painel duplo: Univariado vs. Multivariado com sobreposição das previsões no período de teste).
+1. **`fig_06_curvas_aprendizagem.[png|svg]`:** Inserir no Capítulo 5 (Curvas de perda de treino e validação para as 4 arquiteturas em ambos os regimes).
+2. **`fig_07_previsoes_dl_teste.[png|svg]`:** Inserir no Capítulo 5/6 (Painel duplo: Univariado vs. Multivariado com sobreposição das previsões no período de teste).
 
 ---
 

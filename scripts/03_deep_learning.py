@@ -30,8 +30,9 @@ Conformidade com os Slides da Aula #5 (Slides 79 a 111):
 ================================================================================
 """
 
-from pathlib import Path
 import warnings
+from pathlib import Path
+
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
@@ -48,11 +49,7 @@ warnings.filterwarnings("ignore")
 # 1. Configuração de Caminhos e Ambiente
 # ------------------------------------------------------------------------------
 ROOT_DIR = Path(__file__).resolve().parent.parent
-DATASET_DIR = (
-    ROOT_DIR / "dataset"
-    if (ROOT_DIR / "dataset").exists()
-    else ROOT_DIR / "Dataset"
-)
+DATASET_DIR = ROOT_DIR / "dataset" if (ROOT_DIR / "dataset").exists() else ROOT_DIR / "Dataset"
 OUTPUT_DIR = ROOT_DIR / "output"
 IMAGES_DIR = OUTPUT_DIR / "images"
 PNG_DIR = IMAGES_DIR / "png"
@@ -64,24 +61,22 @@ SVG_DIR.mkdir(parents=True, exist_ok=True)
 TABLES_DIR.mkdir(parents=True, exist_ok=True)
 
 # Configuração visual académica
-plt.rcParams.update(
-    {
-        "font.family": "serif",
-        "font.size": 10,
-        "axes.titlesize": 11,
-        "axes.labelsize": 10,
-        "xtick.labelsize": 9,
-        "ytick.labelsize": 9,
-        "legend.fontsize": 9,
-        "figure.titlesize": 13,
-        "figure.dpi": 300,
-        "savefig.dpi": 300,
-        "savefig.bbox": "tight",
-        "axes.grid": True,
-        "grid.alpha": 0.5,
-        "grid.linestyle": "--",
-    }
-)
+plt.rcParams.update({
+    "font.family": "serif",
+    "font.size": 10,
+    "axes.titlesize": 11,
+    "axes.labelsize": 10,
+    "xtick.labelsize": 9,
+    "ytick.labelsize": 9,
+    "legend.fontsize": 9,
+    "figure.titlesize": 13,
+    "figure.dpi": 300,
+    "savefig.dpi": 300,
+    "savefig.bbox": "tight",
+    "axes.grid": True,
+    "grid.alpha": 0.5,
+    "grid.linestyle": "--",
+})
 
 # Configuração de dispositivo (CPU devido a incompatibilidade de Compute Capability da MX150)
 device = torch.device("cpu")
@@ -99,9 +94,7 @@ def guardar_figura(fig: plt.Figure, nome_base: str) -> tuple[Path, Path]:
     return caminho_png, caminho_svg
 
 
-def calcular_metricas(
-    y_true: np.ndarray, y_pred: np.ndarray
-) -> dict[str, float]:
+def calcular_metricas(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
     """Calcula as quatro métricas obrigatórias da disciplina (Slide 13 e 108)."""
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
@@ -109,9 +102,7 @@ def calcular_metricas(
     reqm = np.sqrt(mean_squared_error(y_true, y_pred))
     eam = mean_absolute_error(y_true, y_pred)
     epam = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
-    epams = (
-        np.mean(200.0 * np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred)))
-    )
+    epams = np.mean(200.0 * np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred)))
 
     return {
         "REQM": round(float(reqm), 2),
@@ -124,17 +115,13 @@ def calcular_metricas(
 # ------------------------------------------------------------------------------
 # 2. Ingestão de Dados e Divisão Cronológica (80:20)
 # ------------------------------------------------------------------------------
-def carregar_dados_e_preparar() -> tuple[
-    pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str]
-]:
+def carregar_dados_e_preparar() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str]]:
     """Carrega a série diária, constrói variáveis exógenas e executa a divisão cronológica."""
     print("[*] A carregar série diária e a aplicar divisão treino/teste (80:20)...")
 
     caminho_diario = DATASET_DIR / "kernel_daily_ts.csv"
     if not caminho_diario.exists():
-        raise FileNotFoundError(
-            f"Ficheiro não encontrado: {caminho_diario}"
-        )
+        raise FileNotFoundError(f"Ficheiro não encontrado: {caminho_diario}")
 
     df = pd.read_csv(
         caminho_diario,
@@ -350,7 +337,7 @@ def treinar_e_avaliar_modelo(
         val_losses.append(val_loss)
 
         if (epoch + 1) % 10 == 0:
-            print(f"       Época {epoch+1:3d}/{epochs} | Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f}")
+            print(f"       Época {epoch + 1:3d}/{epochs} | Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f}")
 
     # Previsão no conjunto de teste
     modelo.eval()
@@ -429,14 +416,15 @@ def main():
 
     for nome, modelo in modelos_uni.items():
         res = treinar_e_avaliar_modelo(
-            nome, modelo, X_train_uni, y_train_uni, X_test_uni, y_test_uni, scaler_y,
-            epochs=15, batch_size=64, lr=0.001
+            nome, modelo, X_train_uni, y_train_uni, X_test_uni, y_test_uni, scaler_y, epochs=15, batch_size=64, lr=0.001
         )
         resultados[nome] = res["metricas"]
         hist_loss[nome] = {"train": res["train_losses"], "val": res["val_losses"]}
         previsoes_teste[nome] = {"pred": res["previsoes"], "real": res["y_real"]}
         m = res["metricas"]
-        print(f"       REQM: {m['REQM']:6.2f} | EAM: {m['EAM']:6.2f} | EPAM: {m['EPAM']:5.2f}% | EPAMs: {m['EPAMs']:5.2f}%")
+        print(
+            f"       REQM: {m['REQM']:6.2f} | EAM: {m['EAM']:6.2f} | EPAM: {m['EPAM']:5.2f}% | EPAMs: {m['EPAMs']:5.2f}%"
+        )
 
     # --- Regime Multivariado ---
     print("\n--- Regime Multivariado (F=6: total_commits + exógenas + harmónicas) ---")
@@ -450,123 +438,131 @@ def main():
 
     for nome, modelo in modelos_multi.items():
         res = treinar_e_avaliar_modelo(
-            nome, modelo, X_train_multi, y_train_multi, X_test_multi, y_test_multi, scaler_y,
-            epochs=15, batch_size=64, lr=0.001
+            nome,
+            modelo,
+            X_train_multi,
+            y_train_multi,
+            X_test_multi,
+            y_test_multi,
+            scaler_y,
+            epochs=15,
+            batch_size=64,
+            lr=0.001,
         )
         resultados[nome] = res["metricas"]
         hist_loss[nome] = {"train": res["train_losses"], "val": res["val_losses"]}
         previsoes_teste[nome] = {"pred": res["previsoes"], "real": res["y_real"]}
         m = res["metricas"]
-        print(f"       REQM: {m['REQM']:6.2f} | EAM: {m['EAM']:6.2f} | EPAM: {m['EPAM']:5.2f}% | EPAMs: {m['EPAMs']:5.2f}%")
+        print(
+            f"       REQM: {m['REQM']:6.2f} | EAM: {m['EAM']:6.2f} | EPAM: {m['EPAM']:5.2f}% | EPAMs: {m['EPAMs']:5.2f}%"
+        )
 
-    # 5. Tabela de Hiperparâmetros (tab_05_arquiteturas_dl.csv)
-    print("\n[*] A gravar tabela de hiperparâmetros (tab_05_arquiteturas_dl.csv)...")
-    tabela_hp = pd.DataFrame(
-        [
-            {
-                "Modelo": "1D-CNN",
-                "Regime": "Univariado (F=1)",
-                "Camadas": "Conv1D(32, k=3) + MaxPool + Conv1D(64, k=3) + MaxPool + Dense(64) + Dropout(0.2) + Dense(1)",
-                "Neurónios": "32 + 64 + 64",
-                "Janela W": WINDOW_SIZE,
-                "Batch Size": 64,
-                "Taxa de Aprendizagem": 0.001,
-                "Otimizador": "Adam",
-                "Função de Perda": "MSE",
-                "Épocas": 50,
-            },
-            {
-                "Modelo": "1D-CNN",
-                "Regime": "Multivariado (F=6)",
-                "Camadas": "Conv1D(32, k=3) + MaxPool + Conv1D(64, k=3) + MaxPool + Dense(64) + Dropout(0.2) + Dense(1)",
-                "Neurónios": "32 + 64 + 64",
-                "Janela W": WINDOW_SIZE,
-                "Batch Size": 64,
-                "Taxa de Aprendizagem": 0.001,
-                "Otimizador": "Adam",
-                "Função de Perda": "MSE",
-                "Épocas": 50,
-            },
-            {
-                "Modelo": "SimpleRNN",
-                "Regime": "Univariado (F=1)",
-                "Camadas": "RNN(50) + Dense(1)",
-                "Neurónios": "50",
-                "Janela W": WINDOW_SIZE,
-                "Batch Size": 64,
-                "Taxa de Aprendizagem": 0.001,
-                "Otimizador": "Adam",
-                "Função de Perda": "MSE",
-                "Épocas": 50,
-            },
-            {
-                "Modelo": "SimpleRNN",
-                "Regime": "Multivariado (F=6)",
-                "Camadas": "RNN(50) + Dense(1)",
-                "Neurónios": "50",
-                "Janela W": WINDOW_SIZE,
-                "Batch Size": 64,
-                "Taxa de Aprendizagem": 0.001,
-                "Otimizador": "Adam",
-                "Função de Perda": "MSE",
-                "Épocas": 50,
-            },
-            {
-                "Modelo": "LSTM",
-                "Regime": "Univariado (F=1)",
-                "Camadas": "LSTM(50) + Dense(1)",
-                "Neurónios": "50",
-                "Janela W": WINDOW_SIZE,
-                "Batch Size": 64,
-                "Taxa de Aprendizagem": 0.001,
-                "Otimizador": "Adam",
-                "Função de Perda": "MSE",
-                "Épocas": 50,
-            },
-            {
-                "Modelo": "LSTM",
-                "Regime": "Multivariado (F=6)",
-                "Camadas": "LSTM(50) + Dense(1)",
-                "Neurónios": "50",
-                "Janela W": WINDOW_SIZE,
-                "Batch Size": 64,
-                "Taxa de Aprendizagem": 0.001,
-                "Otimizador": "Adam",
-                "Função de Perda": "MSE",
-                "Épocas": 50,
-            },
-            {
-                "Modelo": "GRU",
-                "Regime": "Univariado (F=1)",
-                "Camadas": "GRU(50) + Dense(1)",
-                "Neurónios": "50",
-                "Janela W": WINDOW_SIZE,
-                "Batch Size": 64,
-                "Taxa de Aprendizagem": 0.001,
-                "Otimizador": "Adam",
-                "Função de Perda": "MSE",
-                "Épocas": 50,
-            },
-            {
-                "Modelo": "GRU",
-                "Regime": "Multivariado (F=6)",
-                "Camadas": "GRU(50) + Dense(1)",
-                "Neurónios": "50",
-                "Janela W": WINDOW_SIZE,
-                "Batch Size": 64,
-                "Taxa de Aprendizagem": 0.001,
-                "Otimizador": "Adam",
-                "Função de Perda": "MSE",
-                "Épocas": 50,
-            },
-        ]
-    )
-    caminho_tab5 = TABLES_DIR / "tab_05_arquiteturas_dl.csv"
-    tabela_hp.to_csv(caminho_tab5, index=False)
-    print(f"    -> Tabela gravada com sucesso em: {caminho_tab5}")
+    # 6. Tabela de Hiperparâmetros (tab_06_arquiteturas_dl.csv)
+    print("\n[*] A gravar tabela de hiperparâmetros (tab_06_arquiteturas_dl.csv)...")
+    tabela_hp = pd.DataFrame([
+        {
+            "Modelo": "1D-CNN",
+            "Regime": "Univariado (F=1)",
+            "Camadas": "Conv1D(32, k=3) + MaxPool + Conv1D(64, k=3) + MaxPool + Dense(64) + Dropout(0.2) + Dense(1)",
+            "Neurónios": "32 + 64 + 64",
+            "Janela W": WINDOW_SIZE,
+            "Batch Size": 64,
+            "Taxa de Aprendizagem": 0.001,
+            "Otimizador": "Adam",
+            "Função de Perda": "MSE",
+            "Épocas": 50,
+        },
+        {
+            "Modelo": "1D-CNN",
+            "Regime": "Multivariado (F=6)",
+            "Camadas": "Conv1D(32, k=3) + MaxPool + Conv1D(64, k=3) + MaxPool + Dense(64) + Dropout(0.2) + Dense(1)",
+            "Neurónios": "32 + 64 + 64",
+            "Janela W": WINDOW_SIZE,
+            "Batch Size": 64,
+            "Taxa de Aprendizagem": 0.001,
+            "Otimizador": "Adam",
+            "Função de Perda": "MSE",
+            "Épocas": 50,
+        },
+        {
+            "Modelo": "SimpleRNN",
+            "Regime": "Univariado (F=1)",
+            "Camadas": "RNN(50) + Dense(1)",
+            "Neurónios": "50",
+            "Janela W": WINDOW_SIZE,
+            "Batch Size": 64,
+            "Taxa de Aprendizagem": 0.001,
+            "Otimizador": "Adam",
+            "Função de Perda": "MSE",
+            "Épocas": 50,
+        },
+        {
+            "Modelo": "SimpleRNN",
+            "Regime": "Multivariado (F=6)",
+            "Camadas": "RNN(50) + Dense(1)",
+            "Neurónios": "50",
+            "Janela W": WINDOW_SIZE,
+            "Batch Size": 64,
+            "Taxa de Aprendizagem": 0.001,
+            "Otimizador": "Adam",
+            "Função de Perda": "MSE",
+            "Épocas": 50,
+        },
+        {
+            "Modelo": "LSTM",
+            "Regime": "Univariado (F=1)",
+            "Camadas": "LSTM(50) + Dense(1)",
+            "Neurónios": "50",
+            "Janela W": WINDOW_SIZE,
+            "Batch Size": 64,
+            "Taxa de Aprendizagem": 0.001,
+            "Otimizador": "Adam",
+            "Função de Perda": "MSE",
+            "Épocas": 50,
+        },
+        {
+            "Modelo": "LSTM",
+            "Regime": "Multivariado (F=6)",
+            "Camadas": "LSTM(50) + Dense(1)",
+            "Neurónios": "50",
+            "Janela W": WINDOW_SIZE,
+            "Batch Size": 64,
+            "Taxa de Aprendizagem": 0.001,
+            "Otimizador": "Adam",
+            "Função de Perda": "MSE",
+            "Épocas": 50,
+        },
+        {
+            "Modelo": "GRU",
+            "Regime": "Univariado (F=1)",
+            "Camadas": "GRU(50) + Dense(1)",
+            "Neurónios": "50",
+            "Janela W": WINDOW_SIZE,
+            "Batch Size": 64,
+            "Taxa de Aprendizagem": 0.001,
+            "Otimizador": "Adam",
+            "Função de Perda": "MSE",
+            "Épocas": 50,
+        },
+        {
+            "Modelo": "GRU",
+            "Regime": "Multivariado (F=6)",
+            "Camadas": "GRU(50) + Dense(1)",
+            "Neurónios": "50",
+            "Janela W": WINDOW_SIZE,
+            "Batch Size": 64,
+            "Taxa de Aprendizagem": 0.001,
+            "Otimizador": "Adam",
+            "Função de Perda": "MSE",
+            "Épocas": 50,
+        },
+    ])
+    caminho_tab6 = TABLES_DIR / "tab_06_arquiteturas_dl.csv"
+    tabela_hp.to_csv(caminho_tab6, index=False)
+    print(f"    -> Tabela gravada com sucesso em: {caminho_tab6}")
 
-    # 6. Tabela de Benchmark (tab_06_dl_benchmark_metricas.csv)
-    print("[*] A gravar tabela de benchmark (tab_06_dl_benchmark_metricas.csv)...")
+    # 6. Tabela de Benchmark (tab_07_dl_benchmark_metricas.csv)
+    print("[*] A gravar tabela de benchmark (tab_07_dl_benchmark_metricas.csv)...")
     tabela_benchmark = pd.DataFrame(
         [
             {"Modelo": nome, "Regime": "Univariado (F=1)", **resultados[nome]}
@@ -577,12 +573,12 @@ def main():
             for nome in ["1D-CNN Multivariado", "SimpleRNN Multivariado", "LSTM Multivariado", "GRU Multivariado"]
         ]
     )
-    caminho_tab6 = TABLES_DIR / "tab_06_dl_benchmark_metricas.csv"
-    tabela_benchmark.to_csv(caminho_tab6, index=False)
-    print(f"    -> Tabela gravada com sucesso em: {caminho_tab6}")
+    caminho_tab6b = TABLES_DIR / "tab_07_dl_benchmark_metricas.csv"
+    tabela_benchmark.to_csv(caminho_tab6b, index=False)
+    print(f"    -> Tabela gravada com sucesso em: {caminho_tab6b}")
 
-    # 7. Figura de Curvas de Aprendizagem (fig_05_curvas_aprendizagem.[png|svg])
-    print("[*] A gerar curvas de aprendizagem (fig_05_curvas_aprendizagem)...")
+    # 7. Figura de Curvas de Aprendizagem (fig_06_curvas_aprendizagem.[png|svg])
+    print("[*] A gerar curvas de aprendizagem (fig_06_curvas_aprendizagem)...")
     fig, axes = plt.subplots(2, 4, figsize=(18, 8))
     fig.suptitle(
         "Curvas de Aprendizagem (Loss de Treino vs. Validação) — Aula #5 (Slide 80 e 94)\n"
@@ -592,9 +588,7 @@ def main():
         y=1.01,
     )
 
-    for idx, nome in enumerate(
-        ["1D-CNN Univariado", "SimpleRNN Univariado", "LSTM Univariado", "GRU Univariado"]
-    ):
+    for idx, nome in enumerate(["1D-CNN Univariado", "SimpleRNN Univariado", "LSTM Univariado", "GRU Univariado"]):
         ax = axes[0, idx]
         ax.plot(hist_loss[nome]["train"], color="#1f77b4", lw=1.2, label="Treino (MSE)")
         ax.plot(hist_loss[nome]["val"], color="#d62728", lw=1.2, linestyle="--", label="Validação (MSE)")
@@ -604,9 +598,12 @@ def main():
         ax.legend(loc="upper right", fontsize=8)
         ax.grid(True, alpha=0.5)
 
-    for idx, nome in enumerate(
-        ["1D-CNN Multivariado", "SimpleRNN Multivariado", "LSTM Multivariado", "GRU Multivariado"]
-    ):
+    for idx, nome in enumerate([
+        "1D-CNN Multivariado",
+        "SimpleRNN Multivariado",
+        "LSTM Multivariado",
+        "GRU Multivariado",
+    ]):
         ax = axes[1, idx]
         ax.plot(hist_loss[nome]["train"], color="#1f77b4", lw=1.2, label="Treino (MSE)")
         ax.plot(hist_loss[nome]["val"], color="#d62728", lw=1.2, linestyle="--", label="Validação (MSE)")
@@ -617,10 +614,10 @@ def main():
         ax.grid(True, alpha=0.5)
 
     plt.tight_layout()
-    guardar_figura(fig, "fig_05_curvas_aprendizagem")
+    guardar_figura(fig, "fig_06_curvas_aprendizagem")
 
-    # 8. Figura de Previsões no Teste (fig_06_previsoes_dl_teste.[png|svg])
-    print("[*] A gerar previsões no período de teste (fig_06_previsoes_dl_teste)...")
+    # 8. Figura de Previsões no Teste (fig_07_previsoes_dl_teste.[png|svg])
+    print("[*] A gerar previsões no período de teste (fig_07_previsoes_dl_teste)...")
     fig, axes = plt.subplots(2, 1, figsize=(14, 10))
     fig.suptitle(
         "Previsões Out-of-Sample (Daily) — Deep Learning: Univariado vs. Multivariado\n"
@@ -706,7 +703,7 @@ def main():
     ax2.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
 
     plt.tight_layout()
-    guardar_figura(fig, "fig_06_previsoes_dl_teste")
+    guardar_figura(fig, "fig_07_previsoes_dl_teste")
 
     # 9. Exportação da Síntese Markdown para o Relatório
     print("[*] A exportar síntese de Deep Learning em Markdown (output/DEEP_LEARNING_SUMMARY.md)...")
@@ -765,12 +762,12 @@ def main():
 
 ### Comparação Univariado vs. Multivariado (REQM):
 {comparacao_uni_multi}
-* **Melhor Modelo Global:** **{melhor_modelo}** com REQM = {melhor_metricas['REQM']:.2f} e EPAM = {melhor_metricas['EPAM']:.2f}%.
+* **Melhor Modelo Global:** **{melhor_modelo}** com REQM = {melhor_metricas["REQM"]:.2f} e EPAM = {melhor_metricas["EPAM"]:.2f}%.
 * **Interpretação (Slide 94 e 111):** As redes recorrentes (LSTM e GRU) beneficiam significativamente da informação multivariada, capturando não-linearidades nas interações entre volume de commits, disponibilidade de contribuidores e volatilidade de código.
 
 ---
 
-## 4. Tabela de Benchmark (tab_06_dl_benchmark_metricas.csv)
+## 4. Tabela de Benchmark (tab_07_dl_benchmark_metricas.csv)
 * **Métricas Reportadas (Slide 13):**
   * **REQM** (Raiz do Erro Quadrático Médio / RMSE)
   * **EAM** (Erro Absoluto Médio / MAE)
@@ -781,8 +778,8 @@ def main():
 ---
 
 ## 5. Imagens a Incluir no Documento
-1. **`fig_05_curvas_aprendizagem.[png|svg]`:** Inserir no Capítulo 5 (Curvas de perda de treino e validação para as 4 arquiteturas em ambos os regimes).
-2. **`fig_06_previsoes_dl_teste.[png|svg]`:** Inserir no Capítulo 5/6 (Painel duplo: Univariado vs. Multivariado com sobreposição das previsões no período de teste).
+1. **`fig_06_curvas_aprendizagem.[png|svg]`:** Inserir no Capítulo 5 (Curvas de perda de treino e validação para as 4 arquiteturas em ambos os regimes).
+2. **`fig_07_previsoes_dl_teste.[png|svg]`:** Inserir no Capítulo 5/6 (Painel duplo: Univariado vs. Multivariado com sobreposição das previsões no período de teste).
 
 ---
 
