@@ -1,0 +1,9 @@
+Modelo,Regime,Camadas,Neurónios,Janela W,Batch Size,Taxa de Aprendizagem,Otimizador,Função de Perda,Épocas
+1D-CNN,Univariado (F=1),"Conv1D(32, k=3) + MaxPool + Conv1D(64, k=3) + MaxPool + Dense(64) + Dropout(0.2) + Dense(1)",32 + 64 + 64,28,64,0.001,Adam,MSE,50
+1D-CNN,Multivariado (F=6),"Conv1D(32, k=3) + MaxPool + Conv1D(64, k=3) + MaxPool + Dense(64) + Dropout(0.2) + Dense(1)",32 + 64 + 64,28,64,0.001,Adam,MSE,50
+SimpleRNN,Univariado (F=1),RNN(50) + Dense(1),50,28,64,0.001,Adam,MSE,50
+SimpleRNN,Multivariado (F=6),RNN(50) + Dense(1),50,28,64,0.001,Adam,MSE,50
+LSTM,Univariado (F=1),LSTM(50) + Dense(1),50,28,64,0.001,Adam,MSE,50
+LSTM,Multivariado (F=6),LSTM(50) + Dense(1),50,28,64,0.001,Adam,MSE,50
+GRU,Univariado (F=1),GRU(50) + Dense(1),50,28,64,0.001,Adam,MSE,50
+GRU,Multivariado (F=6),GRU(50) + Dense(1),50,28,64,0.001,Adam,MSE,50
