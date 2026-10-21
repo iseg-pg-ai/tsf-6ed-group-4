@@ -19,6 +19,18 @@ The recommended runner is [**`uv`**](https://github.com/astral-sh/uv)—it autom
 
 ### Option A: Using `uv` (Recommended — Zero-Config)
 
+#### **(Optional)** Run Fast Dataset Resampling
+If you want to re-generate the daily and weekly CSVs from the local commit cache (~15s):
+* **Linux / macOS:**
+  ```bash
+  uv run Dataset/Extractor/extractor.py
+  ```
+* **Windows:**
+  ```powershell
+  uv run Dataset\Extractor\extractor.py
+  ```
+
+
 #### 1. Install `uv`
 * **Linux / macOS:**
   ```bash
@@ -42,17 +54,6 @@ The recommended runner is [**`uv`**](https://github.com/astral-sh/uv)—it autom
   uv run scripts\01_eda_decomposition.py
   ```
 
-#### 3. (Optional) Run Fast Dataset Resampling
-If you want to re-generate the daily and weekly CSVs from the local commit cache (~15s):
-* **Linux / macOS:**
-  ```bash
-  uv run Dataset/Extractor/extractor.py
-  ```
-* **Windows:**
-  ```powershell
-  uv run Dataset\Extractor\extractor.py
-  ```
-
 ---
 
 ### Option B: Using Standard Python `venv` + `pip`
@@ -71,6 +72,8 @@ pip install pandas numpy statsmodels scipy matplotlib seaborn scikit-learn pmdar
 
 # 3. Run analysis scripts
 python scripts/01_eda_decomposition.py
+python scripts/02_classical_econometrics.py
+
 ```
 
 #### Windows (PowerShell / CMD)

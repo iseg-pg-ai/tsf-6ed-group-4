@@ -29,12 +29,14 @@ Conformidade com os Slides das Aulas #1 a #4:
 ================================================================================
 """
 
-from pathlib import Path
 import warnings
+from pathlib import Path
+
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 from scipy import stats
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from statsmodels.graphics.gofplots import qqplot
@@ -42,9 +44,8 @@ from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.stats.diagnostic import acorr_ljungbox
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from statsmodels.tsa.seasonal import seasonal_decompose
-from statsmodels.tsa.stattools import adfuller
 from statsmodels.tsa.statespace.sarimax import SARIMAX
-import seaborn as sns
+from statsmodels.tsa.stattools import adfuller
 
 warnings.filterwarnings("ignore")
 
@@ -52,11 +53,7 @@ warnings.filterwarnings("ignore")
 # 1. Configuração de Caminhos e Ambiente
 # ------------------------------------------------------------------------------
 ROOT_DIR = Path(__file__).resolve().parent.parent
-DATASET_DIR = (
-    ROOT_DIR / "dataset"
-    if (ROOT_DIR / "dataset").exists()
-    else ROOT_DIR / "Dataset"
-)
+DATASET_DIR = ROOT_DIR / "dataset" if (ROOT_DIR / "dataset").exists() else ROOT_DIR / "Dataset"
 OUTPUT_DIR = ROOT_DIR / "output"
 IMAGES_DIR = OUTPUT_DIR / "images"
 PNG_DIR = IMAGES_DIR / "png"
@@ -68,24 +65,22 @@ SVG_DIR.mkdir(parents=True, exist_ok=True)
 TABLES_DIR.mkdir(parents=True, exist_ok=True)
 
 # Configuração visual académica
-plt.rcParams.update(
-    {
-        "font.family": "serif",
-        "font.size": 10,
-        "axes.titlesize": 11,
-        "axes.labelsize": 10,
-        "xtick.labelsize": 9,
-        "ytick.labelsize": 9,
-        "legend.fontsize": 9,
-        "figure.titlesize": 13,
-        "figure.dpi": 300,
-        "savefig.dpi": 300,
-        "savefig.bbox": "tight",
-        "axes.grid": True,
-        "grid.alpha": 0.5,
-        "grid.linestyle": "--",
-    }
-)
+plt.rcParams.update({
+    "font.family": "serif",
+    "font.size": 10,
+    "axes.titlesize": 11,
+    "axes.labelsize": 10,
+    "xtick.labelsize": 9,
+    "ytick.labelsize": 9,
+    "legend.fontsize": 9,
+    "figure.titlesize": 13,
+    "figure.dpi": 300,
+    "savefig.dpi": 300,
+    "savefig.bbox": "tight",
+    "axes.grid": True,
+    "grid.alpha": 0.5,
+    "grid.linestyle": "--",
+})
 
 
 def guardar_figura(fig: plt.Figure, nome_base: str) -> tuple[Path, Path]:
@@ -99,9 +94,7 @@ def guardar_figura(fig: plt.Figure, nome_base: str) -> tuple[Path, Path]:
     return caminho_png, caminho_svg
 
 
-def calcular_metricas(
-    y_true: np.ndarray, y_pred: np.ndarray
-) -> dict[str, float]:
+def calcular_metricas(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
     """Calcula as quatro métricas obrigatórias da disciplina (Slide 13):
 
     REQM (RMSE), EAM (MAE), EPAM (MAPE) e EPAMs (sMAPE).
@@ -112,9 +105,7 @@ def calcular_metricas(
     reqm = np.sqrt(mean_squared_error(y_true, y_pred))
     eam = mean_absolute_error(y_true, y_pred)
     epam = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
-    epams = (
-        np.mean(200.0 * np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred)))
-    )
+    epams = np.mean(200.0 * np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred)))
 
     return {
         "REQM": round(float(reqm), 2),
@@ -127,9 +118,7 @@ def calcular_metricas(
 # ------------------------------------------------------------------------------
 # 2. Ingestão de Dados e Divisão Cronológica (80:20)
 # ------------------------------------------------------------------------------
-def carregar_dados_e_dividir() -> tuple[
-    pd.DataFrame, pd.DataFrame, pd.DataFrame
-]:
+def carregar_dados_e_dividir() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Carrega a série semanal, constrói covariáveis e executa a divisão 80:20 cronológica.
 
     Garante estrita aderência a AGENTS.md e class-code/1.py.
@@ -138,9 +127,7 @@ def carregar_dados_e_dividir() -> tuple[
 
     caminho_semanal = DATASET_DIR / "kernel_weekly_ts.csv"
     if not caminho_semanal.exists():
-        raise FileNotFoundError(
-            f"Ficheiro não encontrado: {caminho_semanal}"
-        )
+        raise FileNotFoundError(f"Ficheiro não encontrado: {caminho_semanal}")
 
     # Truncatura da cauda (última observação incompleta) e frequência semanal
     df = pd.read_csv(
@@ -231,22 +218,18 @@ def executar_testes_adf(train: pd.DataFrame) -> pd.DataFrame:
 
         estacionaria = "Sim (p < 0.05)" if p_valor < 0.05 else "Não (p >= 0.05)"
 
-        registos_adf.append(
-            {
-                "Série": nome,
-                "Ordem de Diferenciação": tipo_dif,
-                "Estatística ADF": round(estat_adf, 4),
-                "p-value": (
-                    f"{p_valor:.4e}" if p_valor < 0.0001 else f"{p_valor:.4f}"
-                ),
-                "Valor Crítico (1%)": round(crit_values["1%"], 4),
-                "Valor Crítico (5%)": round(crit_values["5%"], 4),
-                "Valor Crítico (10%)": round(crit_values["10%"], 4),
-                "Lags Utilizados": lags_usados,
-                "Observações": n_obs,
-                "Estacionária?": estacionaria,
-            }
-        )
+        registos_adf.append({
+            "Série": nome,
+            "Ordem de Diferenciação": tipo_dif,
+            "Estatística ADF": round(estat_adf, 4),
+            "p-value": (f"{p_valor:.4e}" if p_valor < 0.0001 else f"{p_valor:.4f}"),
+            "Valor Crítico (1%)": round(crit_values["1%"], 4),
+            "Valor Crítico (5%)": round(crit_values["5%"], 4),
+            "Valor Crítico (10%)": round(crit_values["10%"], 4),
+            "Lags Utilizados": lags_usados,
+            "Observações": n_obs,
+            "Estacionária?": estacionaria,
+        })
 
     df_adf = pd.DataFrame(registos_adf)
     caminho_csv = TABLES_DIR / "tab_03_adf.csv"
@@ -312,9 +295,7 @@ def criar_correlogramas_fac_facp(train: pd.DataFrame) -> tuple[Path, Path]:
     )
     axes[1, 0].set_xlabel("Desfasamento (Lags)")
     axes[1, 0].set_ylabel("Autocorrelação")
-    axes[1, 0].axvline(
-        52, color="crimson", linestyle=":", lw=1.2, label="Lag Sazonal (s=52)"
-    )
+    axes[1, 0].axvline(52, color="crimson", linestyle=":", lw=1.2, label="Lag Sazonal (s=52)")
     axes[1, 0].legend(loc="upper right")
 
     # Painel (d): FACP da série estacionarizada (d=1)
@@ -328,9 +309,7 @@ def criar_correlogramas_fac_facp(train: pd.DataFrame) -> tuple[Path, Path]:
     )
     axes[1, 1].set_xlabel("Desfasamento (Lags)")
     axes[1, 1].set_ylabel("Autocorrelação Parcial")
-    axes[1, 1].axvline(
-        52, color="crimson", linestyle=":", lw=1.2, label="Lag Sazonal (s=52)"
-    )
+    axes[1, 1].axvline(52, color="crimson", linestyle=":", lw=1.2, label="Lag Sazonal (s=52)")
     axes[1, 1].legend(loc="upper right")
 
     plt.tight_layout()
@@ -340,9 +319,7 @@ def criar_correlogramas_fac_facp(train: pd.DataFrame) -> tuple[Path, Path]:
 # ------------------------------------------------------------------------------
 # 5. Modelação de Alisamento Exponencial (Holt e Holt-Winters) — Aulas #1
 # ------------------------------------------------------------------------------
-def modelar_alisamento_exponencial(
-    train: pd.DataFrame, test: pd.DataFrame
-) -> tuple[dict, dict]:
+def modelar_alisamento_exponencial(train: pd.DataFrame, test: pd.DataFrame) -> tuple[dict, dict]:
     """Estima os modelos de alisamento exponencial (Holt Linear, Holt-Winters Aditivo e Multiplicativo).
 
     Implementa a parametrização demonstrada em class-code/1.py e nos Slides 11 a 30.
@@ -354,23 +331,17 @@ def modelar_alisamento_exponencial(
     horizonte = len(test)
 
     # 1. Método de Holt com tendência linear aditiva (class-code/1.py, Slide 19)
-    mod_holt = ExponentialSmoothing(
-        y_train, trend="add", seasonal=None
-    ).fit()
+    mod_holt = ExponentialSmoothing(y_train, trend="add", seasonal=None).fit()
     pred_holt = mod_holt.predict(start=len(y_train), end=len(y_train) + horizonte - 1)
     pred_holt.index = y_test.index
 
     # 2. Método de Holt-Winters com sazonalidade aditiva (s=52, Slide 28)
-    mod_hwa = ExponentialSmoothing(
-        y_train, trend="add", seasonal="add", seasonal_periods=52
-    ).fit()
+    mod_hwa = ExponentialSmoothing(y_train, trend="add", seasonal="add", seasonal_periods=52).fit()
     pred_hwa = mod_hwa.predict(start=len(y_train), end=len(y_train) + horizonte - 1)
     pred_hwa.index = y_test.index
 
     # 3. Método de Holt-Winters com sazonalidade multiplicativa (s=52, Slide 23)
-    mod_hwm = ExponentialSmoothing(
-        y_train, trend="add", seasonal="mul", seasonal_periods=52
-    ).fit()
+    mod_hwm = ExponentialSmoothing(y_train, trend="add", seasonal="mul", seasonal_periods=52).fit()
     pred_hwm = mod_hwm.predict(start=len(y_train), end=len(y_train) + horizonte - 1)
     pred_hwm.index = y_test.index
 
@@ -420,9 +391,7 @@ def modelar_alisamento_exponencial(
 # ------------------------------------------------------------------------------
 # 6. Modelação ARIMA e ARIMAX com Covariáveis Exógenas — Aulas #2, #3 e #4
 # ------------------------------------------------------------------------------
-def modelar_arima_arimax(
-    train: pd.DataFrame, test: pd.DataFrame
-) -> tuple[dict, object]:
+def modelar_arima_arimax(train: pd.DataFrame, test: pd.DataFrame) -> tuple[dict, object]:
     """Estima especificações univariadas (ARIMA) e multivariadas (ARIMAX).
 
     Adiciona covariáveis exógenas (contribuidores e code churn) e termos harmónicos de Fourier.
@@ -549,24 +518,16 @@ def executar_diagnostico_residuos(
 
     linhas_tabela = []
     for nome in params.index:
-        linhas_tabela.append(
-            {
-                "Parâmetro": nome,
-                "Coeficiente": round(float(params[nome]), 4),
-                "Erro-Padrão": round(float(bse[nome]), 4),
-                "Estatística z": round(float(zvalues[nome]), 3),
-                "p-value (P > |z|)": (
-                    f"{pvalues[nome]:.4e}"
-                    if pvalues[nome] < 0.0001
-                    else f"{pvalues[nome]:.4f}"
-                ),
-                "IC 95% Inferior": round(float(ci.loc[nome, 0]), 4),
-                "IC 95% Superior": round(float(ci.loc[nome, 1]), 4),
-                "Significativo (p < 0.05)?": (
-                    "Sim" if pvalues[nome] < 0.05 else "Não"
-                ),
-            }
-        )
+        linhas_tabela.append({
+            "Parâmetro": nome,
+            "Coeficiente": round(float(params[nome]), 4),
+            "Erro-Padrão": round(float(bse[nome]), 4),
+            "Estatística z": round(float(zvalues[nome]), 3),
+            "p-value (P > |z|)": (f"{pvalues[nome]:.4e}" if pvalues[nome] < 0.0001 else f"{pvalues[nome]:.4f}"),
+            "IC 95% Inferior": round(float(ci.loc[nome, 0]), 4),
+            "IC 95% Superior": round(float(ci.loc[nome, 1]), 4),
+            "Significativo (p < 0.05)?": ("Sim" if pvalues[nome] < 0.05 else "Não"),
+        })
 
     df_params = pd.DataFrame(linhas_tabela)
     caminho_tab4 = TABLES_DIR / "tab_04_sarimax_results.csv"
@@ -600,9 +561,7 @@ def executar_diagnostico_residuos(
     )
 
     # Subplot (a): Resíduos Padronizados ao longo do tempo
-    axes[0, 0].plot(
-        resid.index, std_resid, color="#1f77b4", lw=0.9, label="Resíduos Padronizados"
-    )
+    axes[0, 0].plot(resid.index, std_resid, color="#1f77b4", lw=0.9, label="Resíduos Padronizados")
     axes[0, 0].axhline(0, color="black", linestyle="-", lw=0.8, alpha=0.7)
     axes[0, 0].axhline(2, color="crimson", linestyle="--", lw=1.0, label=r"Limiares $\pm 2\sigma$")
     axes[0, 0].axhline(-2, color="crimson", linestyle="--", lw=1.0)
@@ -698,19 +657,17 @@ def consolidar_comparacao_econometrica(
         if not np.isnan(info["gamma"]):
             ordem_desc += f", gamma={info['gamma']}"
 
-        registos_tabela.append(
-            {
-                "Modelo": nome,
-                "Família": "Alisamento Exponencial",
-                "Ordem / Parâmetros": ordem_desc,
-                "AIC": info["aic"],
-                "BIC": info["bic"],
-                "REQM": m["REQM"],
-                "EAM": m["EAM"],
-                "EPAM (%)": m["EPAM"],
-                "EPAMs (%)": m["EPAMs"],
-            }
-        )
+        registos_tabela.append({
+            "Modelo": nome,
+            "Família": "Alisamento Exponencial",
+            "Ordem / Parâmetros": ordem_desc,
+            "AIC": info["aic"],
+            "BIC": info["bic"],
+            "REQM": m["REQM"],
+            "EAM": m["EAM"],
+            "EPAM (%)": m["EPAM"],
+            "EPAMs (%)": m["EPAMs"],
+        })
 
     # 2. Inserir Modelos Box-Jenkins
     for nome, info in modelos_bj.items():
@@ -718,23 +675,19 @@ def consolidar_comparacao_econometrica(
         familia = "ARIMA Univariado" if "Univariado" in nome else "ARIMAX Multivariado"
         ordem_str = str(info["ordem"])
 
-        registos_tabela.append(
-            {
-                "Modelo": nome,
-                "Família": familia,
-                "Ordem / Parâmetros": ordem_str,
-                "AIC": info["aic"],
-                "BIC": info["bic"],
-                "REQM": m["REQM"],
-                "EAM": m["EAM"],
-                "EPAM (%)": m["EPAM"],
-                "EPAMs (%)": m["EPAMs"],
-            }
-        )
+        registos_tabela.append({
+            "Modelo": nome,
+            "Família": familia,
+            "Ordem / Parâmetros": ordem_str,
+            "AIC": info["aic"],
+            "BIC": info["bic"],
+            "REQM": m["REQM"],
+            "EAM": m["EAM"],
+            "EPAM (%)": m["EPAM"],
+            "EPAMs (%)": m["EPAMs"],
+        })
 
-    df_comp = pd.DataFrame(registos_tabela).sort_values(
-        by="REQM", ascending=True
-    )
+    df_comp = pd.DataFrame(registos_tabela).sort_values(by="REQM", ascending=True)
     caminho_tab5 = TABLES_DIR / "tab_05_comparacao_econometrica.csv"
     df_comp.to_csv(caminho_tab5, index=False)
     print(f"    -> Tabela gravada com sucesso em: {caminho_tab5}")
@@ -839,9 +792,7 @@ def projetar_futuro_holt_winters(
     à totalidade da série observada (N=1117 semanas) e projeta previsões para
     os próximos 12 meses (h=52 semanas, 2026–2027).
     """
-    print(
-        f"[*] A projetar previsões futuras a {horizonte} semanas com Holt-Winters reajustado (class-code/2.py)..."
-    )
+    print(f"[*] A projetar previsões futuras a {horizonte} semanas com Holt-Winters reajustado (class-code/2.py)...")
 
     # Recuperar constantes ótimas obtidas na fase de treino (class-code/2.py)
     hw_info = modelos_exp["Holt-Winters Multiplicativo (s=52)"]
@@ -861,22 +812,16 @@ def projetar_futuro_holt_winters(
         smoothing_seasonal=gamma_opt,
     )
 
-    pred_futura = mod_full.predict(
-        start=len(df), end=len(df) + horizonte - 1
-    )
+    pred_futura = mod_full.predict(start=len(df), end=len(df) + horizonte - 1)
     data_inicio_futuro = df.index[-1] + pd.Timedelta(weeks=1)
-    extended_index = pd.date_range(
-        start=data_inicio_futuro, periods=horizonte, freq="W-MON"
-    )
+    extended_index = pd.date_range(start=data_inicio_futuro, periods=horizonte, freq="W-MON")
 
-    df_futuro = pd.DataFrame(
-        {
-            "Data": extended_index.strftime("%Y-%m-%d"),
-            "Ano": extended_index.year,
-            "Semana": extended_index.isocalendar().week,
-            "Previsao_Commits": np.round(pred_futura.values, 1),
-        }
-    )
+    df_futuro = pd.DataFrame({
+        "Data": extended_index.strftime("%Y-%m-%d"),
+        "Ano": extended_index.year,
+        "Semana": extended_index.isocalendar().week,
+        "Previsao_Commits": np.round(pred_futura.values, 1),
+    })
     caminho_tab5b = TABLES_DIR / "tab_05b_previsao_futura_holtwinters.csv"
     df_futuro.to_csv(caminho_tab5b, index=False)
     print(f"    -> Tabela de previsões futuras gravada em: {caminho_tab5b}")
@@ -884,8 +829,10 @@ def projetar_futuro_holt_winters(
     # Gráfico de extensão histórica + projeção futura (class-code/2.py)
     fig, ax = plt.subplots(figsize=(14, 7))
     fig.suptitle(
-        r"Projeção Futura da Atividade Semanal do Kernel Linux ($h=52$ Semanas, 2026–2027)" "\n"
-        r"Método de Holt-Winters Multiplicativo Reajustado à Série Completa" "\n"
+        r"Projeção Futura da Atividade Semanal do Kernel Linux ($h=52$ Semanas, 2026–2027)"
+        "\n"
+        r"Método de Holt-Winters Multiplicativo Reajustado à Série Completa"
+        "\n"
         r"ISEG — Time Series Forecasting — Aula #1 (Slides 27, 30, 33c e class-code/2.py)",
         fontsize=12,
         fontweight="bold",
@@ -929,9 +876,7 @@ def projetar_futuro_holt_winters(
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 
     plt.tight_layout()
-    caminhos_fig5b = guardar_figura(
-        fig, "fig_05b_previsao_futura_holtwinters"
-    )
+    caminhos_fig5b = guardar_figura(fig, "fig_05b_previsao_futura_holtwinters")
 
     return df_futuro, caminhos_fig5b
 
@@ -972,11 +917,11 @@ def exportar_resumo_econometria(
 
 ## 1. Testes de Raízes Unitárias e Estacionaridade (Capítulo 4.1 — Slides 46, 52 e 62)
 * **Série em Níveis ($Y_t$):**
-  * Estatística ADF = **{df_adf.loc[df_adf['Série'] == 'Série em Níveis Y_t', 'Estatística ADF'].values[0]}** (p-value = **{df_adf.loc[df_adf['Série'] == 'Série em Níveis Y_t', 'p-value'].values[0]}**).
+  * Estatística ADF = **{df_adf.loc[df_adf["Série"] == "Série em Níveis Y_t", "Estatística ADF"].values[0]}** (p-value = **{df_adf.loc[df_adf["Série"] == "Série em Níveis Y_t", "p-value"].values[0]}**).
   * **Conclusão:** Não rejeitamos a hipótese nula de raiz unitária ($H_0$). A série em níveis é **não estacionária** e possui tendência estocástica.
 * **Hierarquia de Diferenciação do Professor Jorge Caiado (Slide 62 e 78):**
-  1. **Diferença Sazonal ($\\\\nabla_{{52}} Y_t = (1 - B^{{52}}) Y_t$):** Estatística ADF = **{df_adf.loc[df_adf['Série'] == 'Diferença Sazonal (s=52)', 'Estatística ADF'].values[0]}** (p-value = **{df_adf.loc[df_adf['Série'] == 'Diferença Sazonal (s=52)', 'p-value'].values[0]}**). Rejeita $H_0$ a 1% de significância.
-  2. **Primeira Diferença Simples ($\\\\nabla Y_t = (1 - B) Y_t$):** Estatística ADF = **{df_adf.loc[df_adf['Série'] == 'Primeira Diferença Simples', 'Estatística ADF'].values[0]}** (p-value = **{df_adf.loc[df_adf['Série'] == 'Primeira Diferença Simples', 'p-value'].values[0]}**). Rejeita fortemente $H_0$.
+  1. **Diferença Sazonal ($\\\\nabla_{{52}} Y_t = (1 - B^{{52}}) Y_t$):** Estatística ADF = **{df_adf.loc[df_adf["Série"] == "Diferença Sazonal (s=52)", "Estatística ADF"].values[0]}** (p-value = **{df_adf.loc[df_adf["Série"] == "Diferença Sazonal (s=52)", "p-value"].values[0]}**). Rejeita $H_0$ a 1% de significância.
+  2. **Primeira Diferença Simples ($\\\\nabla Y_t = (1 - B) Y_t$):** Estatística ADF = **{df_adf.loc[df_adf["Série"] == "Primeira Diferença Simples", "Estatística ADF"].values[0]}** (p-value = **{df_adf.loc[df_adf["Série"] == "Primeira Diferença Simples", "p-value"].values[0]}**). Rejeita fortemente $H_0$.
 * **Tabela para o Relatório:** Inserir `tab_03_adf.csv`.
 
 ---
@@ -991,17 +936,17 @@ def exportar_resumo_econometria(
 ---
 
 ## 3. Desempenho do Alisamento Exponencial (Capítulo 4.3 — Slides 11 a 30)
-* **Holt Linear:** REQM = **{df_comp.loc[df_comp['Modelo'] == 'Holt Linear', 'REQM'].values[0]}**, EPAM = **{df_comp.loc[df_comp['Modelo'] == 'Holt Linear', 'EPAM (%)'].values[0]}%**.
-* **Holt-Winters Multiplicativo ($s=52$):** REQM = **{holt_row['REQM']}**, EPAM = **{holt_row['EPAM (%)']}%** (AIC = {holt_row['AIC']}).
+* **Holt Linear:** REQM = **{df_comp.loc[df_comp["Modelo"] == "Holt Linear", "REQM"].values[0]}**, EPAM = **{df_comp.loc[df_comp["Modelo"] == "Holt Linear", "EPAM (%)"].values[0]}%**.
+* **Holt-Winters Multiplicativo ($s=52$):** REQM = **{holt_row["REQM"]}**, EPAM = **{holt_row["EPAM (%)"]}%** (AIC = {holt_row["AIC"]}).
 * **Observação Teórica:** O alisamento exponencial gera previsões que acompanham o nível médio, mas falha em capturar as oscilações pontuais extremas provocadas pelas *merge windows* do kernel.
 
 ---
 
 ## 4. Modelação Box-Jenkins: Ganho Estrutural com Covariáveis Exógenas (Capítulo 4.4 — Slides 67 a 74)
 * **Confronto Univariado vs. Multivariado:**
-  * **ARIMA(0, 1, 2) Univariado:** REQM = **{arima_row['REQM']}**, EPAM = **{arima_row['EPAM (%)']}%** (AIC = {arima_row['AIC']}).
-  * **{melhor_modelo_row['Modelo']}:** REQM = **{melhor_modelo_row['REQM']}**, EPAM = **{melhor_modelo_row['EPAM (%)']}%** (AIC = {melhor_modelo_row['AIC']}).
-  * **Ganho Percentual:** A introdução das covariáveis de engenharia reduziu o REQM em **{((arima_row['REQM'] - melhor_modelo_row['REQM']) / arima_row['REQM']) * 100:.1f}%** e o EPAM de **{arima_row['EPAM (%)']}%** para **{melhor_modelo_row['EPAM (%)']}%**!
+  * **ARIMA(0, 1, 2) Univariado:** REQM = **{arima_row["REQM"]}**, EPAM = **{arima_row["EPAM (%)"]}%** (AIC = {arima_row["AIC"]}).
+  * **{melhor_modelo_row["Modelo"]}:** REQM = **{melhor_modelo_row["REQM"]}**, EPAM = **{melhor_modelo_row["EPAM (%)"]}%** (AIC = {melhor_modelo_row["AIC"]}).
+  * **Ganho Percentual:** A introdução das covariáveis de engenharia reduziu o REQM em **{((arima_row["REQM"] - melhor_modelo_row["REQM"]) / arima_row["REQM"]) * 100:.1f}%** e o EPAM de **{arima_row["EPAM (%)"]}%** para **{melhor_modelo_row["EPAM (%)"]}%**!
 * **Significância dos Coeficientes das Covariáveis (Slide 70):**
   * `unique_authors` (Contribuidores): Coeficiente = **+{coef_autores}** ($p = {pval_autores}$). Por cada novo contribuidor ativo na semana, o kernel integra em média ~{coef_autores:.1f} commits adicionais.
   * `log_churn` (Code Churn): Coeficiente = **+{coef_churn}** ($p = {pval_churn}$). Forte impacto positivo e altamente significativo.
@@ -1011,8 +956,8 @@ def exportar_resumo_econometria(
 
 ## 5. Diagnóstico Residual e Validação de Ruído Branco (Capítulo 4.5 — Slides 55 e 70)
 * **Teste de Ljung-Box (Validação de Não-Autocorrelação):**
-  * Lag 1: $Q = {lb_teste.loc[1, 'lb_stat']:.2f}$, $p\\\\text{{-value}} = {lb_teste.loc[1, 'lb_pvalue']:.4f}$ ($> 0.05$).
-  * Lag 10: $Q = {lb_teste.loc[10, 'lb_stat']:.2f}$, $p\\\\text{{-value}} = {lb_teste.loc[10, 'lb_pvalue']:.4f}$ ($> 0.05$).
+  * Lag 1: $Q = {lb_teste.loc[1, "lb_stat"]:.2f}$, $p\\\\text{{-value}} = {lb_teste.loc[1, "lb_pvalue"]:.4f}$ ($> 0.05$).
+  * Lag 10: $Q = {lb_teste.loc[10, "lb_stat"]:.2f}$, $p\\\\text{{-value}} = {lb_teste.loc[10, "lb_pvalue"]:.4f}$ ($> 0.05$).
   * **Conclusão:** O teste confirma a ausência de autocorrelação linear sistemática nos resíduos a 5% de significância. O modelo filtrou a estrutura temporal da série, restando **ruído branco (*white noise*)**.
 * **Teste de Normalidade de Jarque-Bera:**
   * $p\\\\text{{-value}} = {jb_pval:.2e}$. A hipótese nula de normalidade estrita é rejeitada devido às caudas pesadas provocadas pelos picos pontuais de *merge windows*, fenómeno clássico documentado em engenharia de sistemas.
@@ -1066,22 +1011,16 @@ def main():
     modelos_bj, modelo_vencedor_info = modelar_arima_arimax(train, test)
 
     # 6. Diagnóstico Formal de Resíduos (tab_04, fig_04)
-    df_params, _, lb_teste, jb_pval = executar_diagnostico_residuos(
-        modelo_vencedor_info
-    )
+    df_params, _, lb_teste, jb_pval = executar_diagnostico_residuos(modelo_vencedor_info)
 
     # 7. Comparação Out-of-Sample e Previsão no Teste (tab_05, fig_05)
-    df_comp, _ = consolidar_comparacao_econometrica(
-        df, train, test, modelos_exp, modelos_bj
-    )
+    df_comp, _ = consolidar_comparacao_econometrica(df, train, test, modelos_exp, modelos_bj)
 
     # 8. Projeção Futura com Holt-Winters Reajustado (class-code/2.py, Slide 30 / 33c)
     projetar_futuro_holt_winters(df, modelos_exp, horizonte=52)
 
     # 9. Exportação da Síntese Markdown para o Relatório
-    exportar_resumo_econometria(
-        df_adf, df_comp, df_params, lb_teste, jb_pval
-    )
+    exportar_resumo_econometria(df_adf, df_comp, df_params, lb_teste, jb_pval)
 
     print("=" * 80)
     print("[OK] SCRIPT 02 CONCLUÍDO COM SUCESSO!")

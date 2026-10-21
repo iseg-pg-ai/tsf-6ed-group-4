@@ -32,8 +32,8 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy import stats
 import seaborn as sns
+from scipy import stats
 from statsmodels.tsa.seasonal import seasonal_decompose
 
 # ------------------------------------------------------------------------------

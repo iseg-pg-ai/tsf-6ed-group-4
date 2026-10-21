@@ -25,14 +25,15 @@ and diff histories required for code churn calculation.
 
 import argparse
 import csv
-from datetime import datetime
 import multiprocessing as mp
 import os
-from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
+from datetime import datetime
+from pathlib import Path
+
 import pandas as pd
 
 # ==============================================================================
@@ -72,7 +73,11 @@ def verify_repo(path: Path) -> None:
     """Verifies that the target path exists and is a valid Git repository."""
     if not path.exists():
         print(f"[ERROR] Path does not exist: {path}", file=sys.stderr, flush=True)
-        print("Please configure DEFAULT_REPO_PATH at the top of this script or pass the path as an argument:", file=sys.stderr, flush=True)
+        print(
+            "Please configure DEFAULT_REPO_PATH at the top of this script or pass the path as an argument:",
+            file=sys.stderr,
+            flush=True,
+        )
         print(f"  python {Path(__file__).name} /path/to/linux-bare.git", file=sys.stderr, flush=True)
         sys.exit(1)
 
@@ -228,21 +233,16 @@ def extract_git_commits_parallel(repo_path: Path, output_csv: Path, num_workers:
         shutil.rmtree(TEMP_CHUNKS_DIR)
     TEMP_CHUNKS_DIR.mkdir(parents=True, exist_ok=True)
 
-    chunks = [
-        commit_hashes[i : i + CHUNK_SIZE]
-        for i in range(0, total_commits, CHUNK_SIZE)
-    ]
+    chunks = [commit_hashes[i : i + CHUNK_SIZE] for i in range(0, total_commits, CHUNK_SIZE)]
     total_chunks = len(chunks)
 
     print(
-        f"[*] Launching {num_workers} parallel workers for {total_chunks} chunks "
-        f"({CHUNK_SIZE:,} commits/chunk)...",
+        f"[*] Launching {num_workers} parallel workers for {total_chunks} chunks ({CHUNK_SIZE:,} commits/chunk)...",
         flush=True,
     )
 
     worker_args = [
-        (idx, chunk, repo_path, TEMP_CHUNKS_DIR / f"chunk_{idx:05d}.csv")
-        for idx, chunk in enumerate(chunks)
+        (idx, chunk, repo_path, TEMP_CHUNKS_DIR / f"chunk_{idx:05d}.csv") for idx, chunk in enumerate(chunks)
     ]
 
     completed_chunks = 0
@@ -314,12 +314,18 @@ def build_time_series(raw_csv: Path, daily_csv: Path, weekly_csv: Path) -> None:
             "insertions": "sum",
             "deletions": "sum",
         }
-        ts_df = df.resample(rule).agg(agg_spec).rename(
-            columns={
-                "is_merge": "total_commits",
-                "author_email": "unique_authors",
-            }
-        ).fillna(0)
+        ts_df = (
+            df
+            .resample(rule)
+            .agg(agg_spec)
+            .rename(
+                columns={
+                    "is_merge": "total_commits",
+                    "author_email": "unique_authors",
+                }
+            )
+            .fillna(0)
+        )
 
         ts_df["total_churn"] = ts_df["insertions"] + ts_df["deletions"]
         ts_df["net_code_growth"] = ts_df["insertions"] - ts_df["deletions"]

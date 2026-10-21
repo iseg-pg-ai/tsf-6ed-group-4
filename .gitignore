@@ -41,6 +41,5 @@ _kernel_ts_chunks/
 .DS_Store
 Thumbs.db
 .idea/
-.vscode/
 *.swp
 *.swo
