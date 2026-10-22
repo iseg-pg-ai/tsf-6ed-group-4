@@ -55,13 +55,12 @@ from utils import (
     dividir_treino_teste,
     finalizar_script,
     guardar_figura,
-    guardar_markdown,
+    guardar_markdown_template,
     guardar_tabela,
     iniciar_script,
 )
 
 warnings.filterwarnings("ignore")
-
 
 # Configuração de Caminhos e Ambiente
 PNG_DIR.mkdir(parents=True, exist_ok=True)
@@ -305,11 +304,24 @@ def modelar_alisamento_exponencial(train: pd.DataFrame, test: pd.DataFrame) -> d
         },
     }
 
+    registos = []
     for nome, dados in modelos_exp.items():
         m = dados["metricas"]
-        print(
-            f"    -> {nome:34s} | REQM: {m['REQM']:6.2f} | EAM: {m['EAM']:6.2f} | EPAM: {m['EPAM']:5.2f}% | EPAMs: {m['EPAMs']:5.2f}%"
-        )
+        registos.append({
+            "Modelo": nome,
+            "AIC": dados["aic"],
+            "BIC": dados["bic"],
+            "Alpha": dados["alpha"],
+            "Beta": dados["beta"],
+            "Gamma": dados["gamma"],
+            "REQM": m["REQM"],
+            "EAM": m["EAM"],
+            "EPAM (%)": m["EPAM"],
+            "EPAMs (%)": m["EPAMs"],
+        })
+
+    df_exp = pd.DataFrame(registos)
+    guardar_tabela(df_exp, "alisamento_exponencial", "Tabela de alisamento exponencial")
 
     return modelos_exp
 
@@ -385,7 +397,7 @@ def modelar_arima_arimax(
     menor_reqm = 1e9
 
     for rotulo, ordem, X_tr, X_te, var_names in especificacoes:
-        print(f"    -> A ajustar {rotulo}...")
+        # print(f"    -> A ajustar {rotulo}...")
         mod = SARIMAX(
             y_train,
             exog=X_tr,
@@ -411,13 +423,26 @@ def modelar_arima_arimax(
             "exog_vars": var_names,
         }
 
-        print(
-            f"       AIC: {res.aic:8.2f} | BIC: {res.bic:8.2f} | REQM: {metricas['REQM']:6.2f} | EPAM: {metricas['EPAM']:5.2f}%"
-        )
-
         if metricas["REQM"] < menor_reqm:
             menor_reqm = metricas["REQM"]
             modelo_vencedor = (rotulo, res, var_names)
+
+    registos = []
+    for rotulo, info in modelos_bj.items():
+        m = info["metricas"]
+        registos.append({
+            "Modelo": rotulo,
+            "Ordem": str(info["ordem"]),
+            "AIC": info["aic"],
+            "BIC": info["bic"],
+            "REQM": m["REQM"],
+            "EAM": m["EAM"],
+            "EPAM (%)": m["EPAM"],
+            "EPAMs (%)": m["EPAMs"],
+        })
+
+    df_bj = pd.DataFrame(registos)
+    guardar_tabela(df_bj, "arima_arimax", "Tabela ARIMA e ARIMAX")
 
     assert modelo_vencedor is not None
     return modelos_bj, modelo_vencedor
@@ -464,13 +489,30 @@ def executar_diagnostico_residuos(
     lb_teste = acorr_ljungbox(resid, lags=[1, 5, 10, 15, 20], return_df=True)
     jb_stat, jb_pval = cast(tuple[float, float], stats.jarque_bera(resid))
 
-    print("\n    [Diagnóstico de Resíduos]")
-    print(f"    -> Teste de Jarque-Bera: Estatística = {jb_stat:.2f}, p-value = {jb_pval:.4e}")
-    print("    -> Teste de Ljung-Box (Lags 1 a 20):")
+    linhas_diag = []
+    jb_status = "Resíduos Normais (p > 0.05)" if jb_pval > 0.05 else "Rejeita Normalidade (p <= 0.05)"
+    linhas_diag.append({
+        "Teste": "Jarque-Bera (Normalidade)",
+        "Desfasamento": "Global",
+        "Estatística": round(jb_stat, 2),
+        "p-value": (f"{jb_pval:.4e}" if jb_pval < 0.0001 else f"{jb_pval:.4f}"),
+        "Diagnóstico": jb_status,
+    })
+
     for lag_idx, row in lb_teste.iterrows():
-        p_q = row["lb_pvalue"]
-        status = "Ruído Branco (p > 0.05)" if p_q > 0.05 else "Autocorrelação Residual"
-        print(f"       Lag {lag_idx:2d}: Q = {row['lb_stat']:6.2f} | p-value = {p_q:.4f} -> {status}")
+        p_q = cast(float, row["lb_pvalue"])
+        stat_q = cast(float, row["lb_stat"])
+        lb_status = "Ruído Branco (p > 0.05)" if p_q > 0.05 else "Autocorrelação Residual"
+        linhas_diag.append({
+            "Teste": "Ljung-Box (Ruído Branco)",
+            "Desfasamento": f"Lag {lag_idx}",
+            "Estatística": round(stat_q, 2),
+            "p-value": (f"{p_q:.4e}" if p_q < 0.0001 else f"{p_q:.4f}"),
+            "Diagnóstico": lb_status,
+        })
+
+    df_diag = pd.DataFrame(linhas_diag)
+    guardar_tabela(df_diag, "diagnostico_residuos", "Tabela de diagnóstico de resíduos")
 
     # 3. Painel Quádruplo de Diagnóstico (fig_04_diagnostico_residuos.[png|svg])
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
@@ -811,83 +853,44 @@ def exportar_resumo_econometria(
     arima_row = df_comp[df_comp["Modelo"].str.contains("ARIMA(0, 1, 2) Univariado", regex=False)].iloc[0]
 
     # Formatar coeficientes das covariáveis
-    coef_autores = df_params.loc[df_params["Parâmetro"] == "unique_authors", "Coeficiente"].values[0]
+    coef_autores = float(df_params.loc[df_params["Parâmetro"] == "unique_authors", "Coeficiente"].values[0])
     pval_autores = df_params.loc[df_params["Parâmetro"] == "unique_authors", "p-value (P > |z|)"].values[0]
-    coef_churn = df_params.loc[df_params["Parâmetro"] == "log_churn", "Coeficiente"].values[0]
+    coef_churn = float(df_params.loc[df_params["Parâmetro"] == "log_churn", "Coeficiente"].values[0])
     pval_churn = df_params.loc[df_params["Parâmetro"] == "log_churn", "p-value (P > |z|)"].values[0]
 
-    conteudo = f"""# Síntese da Modelação Econométrica Clássica
-**Documento de Apoio à Redação para o Elemento A (Capítulo 4 do Relatório)**  
-*Gerado automaticamente por `scripts/02_classical_econometrics.py`*
+    contexto: dict[str, object] = {
+        "adf_stat_niveis": df_adf.loc[df_adf["Série"] == "Série em Níveis Y_t", "Estatística ADF"].values[0],
+        "adf_pval_niveis": df_adf.loc[df_adf["Série"] == "Série em Níveis Y_t", "p-value"].values[0],
+        "adf_stat_sazonal": df_adf.loc[df_adf["Série"] == "Diferença Sazonal (s=52)", "Estatística ADF"].values[0],
+        "adf_pval_sazonal": df_adf.loc[df_adf["Série"] == "Diferença Sazonal (s=52)", "p-value"].values[0],
+        "adf_stat_simples": df_adf.loc[df_adf["Série"] == "Primeira Diferença Simples", "Estatística ADF"].values[0],
+        "adf_pval_simples": df_adf.loc[df_adf["Série"] == "Primeira Diferença Simples", "p-value"].values[0],
+        "holt_linear_reqm": df_comp.loc[df_comp["Modelo"] == "Holt Linear", "REQM"].values[0],
+        "holt_linear_epam": df_comp.loc[df_comp["Modelo"] == "Holt Linear", "EPAM (%)"].values[0],
+        "holt_mult_reqm": holt_row["REQM"],
+        "holt_mult_epam": holt_row["EPAM (%)"],
+        "holt_mult_aic": holt_row["AIC"],
+        "arima_reqm": arima_row["REQM"],
+        "arima_epam": arima_row["EPAM (%)"],
+        "arima_aic": arima_row["AIC"],
+        "melhor_modelo": melhor_modelo_row["Modelo"],
+        "melhor_reqm": melhor_modelo_row["REQM"],
+        "melhor_epam": melhor_modelo_row["EPAM (%)"],
+        "melhor_aic": melhor_modelo_row["AIC"],
+        "ganho_reqm_pct": f"{((arima_row['REQM'] - melhor_modelo_row['REQM']) / arima_row['REQM']) * 100:.1f}",
+        "coef_autores": coef_autores,
+        "coef_autores_fmt": f"{coef_autores:.1f}",
+        "pval_autores": pval_autores,
+        "coef_churn": coef_churn,
+        "pval_churn": pval_churn,
+        "lb_lag1_stat": f"{lb_teste.loc[1, 'lb_stat']:.2f}",
+        "lb_lag1_pval": f"{lb_teste.loc[1, 'lb_pvalue']:.4f}",
+        "lb_lag10_stat": f"{lb_teste.loc[10, 'lb_stat']:.2f}",
+        "lb_lag10_pval": f"{lb_teste.loc[10, 'lb_pvalue']:.4f}",
+        "jb_pval": f"{jb_pval:.2e}",
+    }
 
----
-
-## 1. Testes de Raízes Unitárias e Estacionaridade (Capítulo 4.1 — Slides 46, 52 e 62)
-* **Série em Níveis ($Y_t$):**
-  * Estatística ADF = **{df_adf.loc[df_adf["Série"] == "Série em Níveis Y_t", "Estatística ADF"].values[0]}** (p-value = **{df_adf.loc[df_adf["Série"] == "Série em Níveis Y_t", "p-value"].values[0]}**).
-  * **Conclusão:** Não rejeitamos a hipótese nula de raiz unitária ($H_0$). A série em níveis é **não estacionária** e possui tendência estocástica.
-* **Hierarquia de Diferenciação do Professor Jorge Caiado (Slide 62 e 78):**
-  1. **Diferença Sazonal ($\\\\nabla_{{52}} Y_t = (1 - B^{{52}}) Y_t$):** Estatística ADF = **{df_adf.loc[df_adf["Série"] == "Diferença Sazonal (s=52)", "Estatística ADF"].values[0]}** (p-value = **{df_adf.loc[df_adf["Série"] == "Diferença Sazonal (s=52)", "p-value"].values[0]}**). Rejeita $H_0$ a 1% de significância.
-  2. **Primeira Diferença Simples ($\\\\nabla Y_t = (1 - B) Y_t$):** Estatística ADF = **{df_adf.loc[df_adf["Série"] == "Primeira Diferença Simples", "Estatística ADF"].values[0]}** (p-value = **{df_adf.loc[df_adf["Série"] == "Primeira Diferença Simples", "p-value"].values[0]}**). Rejeita fortemente $H_0$.
-* **Tabela para o Relatório:** Inserir `tab_03_adf.csv`.
-
----
-
-## 2. Identificação através de Correlogramas (Capítulo 4.2 — Slides 35 a 45, 51)
-* **Comportamento da FAC e FACP:**
-  * Na série em níveis, a FAC decresce muito lentamente para zero, sintoma inequívoco de não estacionaridade (Slide 37 e 51).
-  * Na série diferenciada ($\\\\nabla Y_t$), a FAC corta abruptamente após os primeiros desfasamentos e apresenta picos sazonais no lag 52.
-  * De acordo com os **Figurinos Teóricos** (Slide 45), este corte rápido na FAC com decaimento na FACP suporta a formulação de processos de médias móveis de baixa ordem (MA(1) ou MA(2)) combinados com autoregressão.
-* **Figura para o Relatório:** Inserir `fig_03_fac_facp.[png|svg]`.
-
----
-
-## 3. Desempenho do Alisamento Exponencial (Capítulo 4.3 — Slides 11 a 30)
-* **Holt Linear:** REQM = **{df_comp.loc[df_comp["Modelo"] == "Holt Linear", "REQM"].values[0]}**, EPAM = **{df_comp.loc[df_comp["Modelo"] == "Holt Linear", "EPAM (%)"].values[0]}%**.
-* **Holt-Winters Multiplicativo ($s=52$):** REQM = **{holt_row["REQM"]}**, EPAM = **{holt_row["EPAM (%)"]}%** (AIC = {holt_row["AIC"]}).
-* **Observação Teórica:** O alisamento exponencial gera previsões que acompanham o nível médio, mas falha em capturar as oscilações pontuais extremas provocadas pelas *merge windows* do kernel.
-
----
-
-## 4. Modelação Box-Jenkins: Ganho Estrutural com Covariáveis Exógenas (Capítulo 4.4 — Slides 67 a 74)
-* **Confronto Univariado vs. Multivariado:**
-  * **ARIMA(0, 1, 2) Univariado:** REQM = **{arima_row["REQM"]}**, EPAM = **{arima_row["EPAM (%)"]}%** (AIC = {arima_row["AIC"]}).
-  * **{melhor_modelo_row["Modelo"]}:** REQM = **{melhor_modelo_row["REQM"]}**, EPAM = **{melhor_modelo_row["EPAM (%)"]}%** (AIC = {melhor_modelo_row["AIC"]}).
-  * **Ganho Percentual:** A introdução das covariáveis de engenharia reduziu o REQM em **{((arima_row["REQM"] - melhor_modelo_row["REQM"]) / arima_row["REQM"]) * 100:.1f}%** e o EPAM de **{arima_row["EPAM (%)"]}%** para **{melhor_modelo_row["EPAM (%)"]}%**!
-* **Significância dos Coeficientes das Covariáveis (Slide 70):**
-  * `unique_authors` (Contribuidores): Coeficiente = **+{coef_autores}** ($p = {pval_autores}$). Por cada novo contribuidor ativo na semana, o kernel integra em média ~{coef_autores:.1f} commits adicionais.
-  * `log_churn` (Code Churn): Coeficiente = **+{coef_churn}** ($p = {pval_churn}$). Forte impacto positivo e altamente significativo.
-* **Tabelas para o Relatório:** Inserir `tab_04_sarimax_results.csv` e `tab_05_comparacao_econometrica.csv`.
-
----
-
-## 5. Diagnóstico Residual e Validação de Ruído Branco (Capítulo 4.5 — Slides 55 e 70)
-* **Teste de Ljung-Box (Validação de Não-Autocorrelação):**
-  * Lag 1: $Q = {lb_teste.loc[1, "lb_stat"]:.2f}$, $p\\\\text{{-value}} = {lb_teste.loc[1, "lb_pvalue"]:.4f}$ ($> 0.05$).
-  * Lag 10: $Q = {lb_teste.loc[10, "lb_stat"]:.2f}$, $p\\\\text{{-value}} = {lb_teste.loc[10, "lb_pvalue"]:.4f}$ ($> 0.05$).
-  * **Conclusão:** O teste confirma a ausência de autocorrelação linear sistemática nos resíduos a 5% de significância. O modelo filtrou a estrutura temporal da série, restando **ruído branco (*white noise*)**.
-* **Teste de Normalidade de Jarque-Bera:**
-  * $p\\\\text{{-value}} = {jb_pval:.2e}$. A hipótese nula de normalidade estrita é rejeitada devido às caudas pesadas provocadas pelos picos pontuais de *merge windows*, fenómeno clássico documentado em engenharia de sistemas.
-* **Figura para o Relatório:** Inserir `fig_04_diagnostico_residuos.[png|svg]`.
-
----
-
-## 6. Projeção Futura a 52 Semanas com Holt-Winters Reajustado (Slides 27, 30, 33c e class-code/2.py)
-* **Procedimento:** Conforme demonstrado pelo docente em aula (`class-code/2.py`), após apurar as constantes de alisamento ótimas no conjunto de treino, o modelo Holt-Winters Multiplicativo foi reajustado à totalidade das 1.117 semanas observadas (2005–2026).
-* **Horizonte Projetado:** 52 semanas no futuro (Setembro de 2026 a Setembro de 2027).
-* **Comportamento da Curva Futura:** A projeção preserva a amplitude cíclica anual ($s=52$), antecipando oscilações entre ~1.800 commits (períodos de abrandamento estival e natalício) e ~2.270 commits semanais.
-* **Tabela e Figura:** Inserir `tab_05b_previsao_futura_holtwinters.csv` e `fig_05b_previsao_futura_holtwinters.[png|svg]`.
-
----
-
-## 7. Imagens Geradas para os Capítulos 4 e 6
-1. **`fig_03_fac_facp.[png|svg]`:** Inserir no Capítulo 4.2 (Correlogramas da série em níveis e diferenciada).
-2. **`fig_04_diagnostico_residuos.[png|svg]`:** Inserir no Capítulo 4.5 (Painel quádruplo de diagnóstico dos resíduos do modelo eleito).
-3. **`fig_05_comparacao_econometrica.[png|svg]`:** Inserir no Capítulo 4.4 / 6.1 (Sobreposição visual das previsões dos modelos econométricos no período de teste).
-4. **`fig_05b_previsao_futura_holtwinters.[png|svg]`:** Inserir no Capítulo 4.3 / 7 (Projeção futura a 52 semanas com o modelo Holt-Winters reajustado à série completa).
-"""
-
-    guardar_markdown(conteudo, "ECONOMETRICS_SUMMARY.md")
+    guardar_markdown_template("econometrics_summary.md", "ECONOMETRICS_SUMMARY.md", contexto)
 
 
 def main():

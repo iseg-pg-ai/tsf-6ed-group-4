@@ -28,7 +28,7 @@
 
 ## 3. Deteção de Outliers na Série Residual (Capítulo 3 — Slide 10)
 * **Regra de Decisão do Slide 10:** $|R_t - \bar{R}| > 2 \sigma_R$ aplicada aos resíduos da decomposição aditiva.
-* **Desvio-Padrão Residual ($\\sigma_R$):** 493.35 commits.
+* **Desvio-Padrão Residual ($\sigma_R$):** 493.35 commits.
 * **Total de Semanas Assinaladas como Outliers:** 40 semanas (3.76% da amostra, em estrita conformidade com a expectativa teórica de uma distribuição normal onde ~5% dos pontos excedem 2 desvios-padrão).
   * **Picos Positivos Significativos:** 34 semanas (coincidem maioritariamente com semanas de abertura de merge windows imediatas ao lançamento de versões rc1).
   * **Quedas Anómalas Negativas:** 6 semanas (coincidem sistematicamente com as semanas 51–52 de Natal/Ano Novo e semanas 32–34 de pausa estival em Agosto).

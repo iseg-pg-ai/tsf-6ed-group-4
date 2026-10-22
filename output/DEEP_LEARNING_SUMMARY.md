@@ -32,12 +32,11 @@
   * Codificação harmónica do dia da semana ($\sin$ e $\cos$ do ciclo $s=7$)
 
 ### Comparação Univariado vs. Multivariado (REQM):
-  * **1D-CNN:** Univariado REQM=152.13 (EPAM=62.66%) vs. Multivariado REQM=131.54 (EPAM=55.22%) -> Ganho de +13.5%
-  * **SimpleRNN:** Univariado REQM=141.50 (EPAM=73.76%) vs. Multivariado REQM=136.37 (EPAM=67.05%) -> Ganho de +3.6%
-  * **LSTM:** Univariado REQM=164.91 (EPAM=131.10%) vs. Multivariado REQM=129.98 (EPAM=58.93%) -> Ganho de +21.2%
-  * **GRU:** Univariado REQM=141.80 (EPAM=76.67%) vs. Multivariado REQM=132.68 (EPAM=55.10%) -> Ganho de +6.4%
-
-* **Melhor Modelo Global:** **LSTM Multivariado** com REQM = 129.98 e EPAM = 58.93%.
+  * **1D-CNN:** Univariado REQM=140.28 (EPAM=70.15%) vs. Multivariado REQM=130.98 (EPAM=52.57%) -> Ganho de +6.6%
+  * **SimpleRNN:** Univariado REQM=141.62 (EPAM=74.20%) vs. Multivariado REQM=136.61 (EPAM=66.11%) -> Ganho de +3.5%
+  * **LSTM:** Univariado REQM=163.17 (EPAM=130.96%) vs. Multivariado REQM=129.81 (EPAM=62.08%) -> Ganho de +20.4%
+  * **GRU:** Univariado REQM=160.77 (EPAM=122.96%) vs. Multivariado REQM=132.09 (EPAM=54.16%) -> Ganho de +17.8%
+* **Melhor Modelo Global:** **LSTM Multivariado** com REQM = 129.81 e EPAM = 62.08%.
 * **Interpretação (Slide 94 e 111):** As redes recorrentes (LSTM e GRU) beneficiam significativamente da informação multivariada, capturando não-linearidades nas interações entre volume de commits, disponibilidade de contribuidores e volatilidade de código.
 
 ---

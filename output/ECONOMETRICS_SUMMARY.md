@@ -9,8 +9,8 @@
   * Estatística ADF = **-1.9514** (p-value = **0.3083**).
   * **Conclusão:** Não rejeitamos a hipótese nula de raiz unitária ($H_0$). A série em níveis é **não estacionária** e possui tendência estocástica.
 * **Hierarquia de Diferenciação do Professor Jorge Caiado (Slide 62 e 78):**
-  1. **Diferença Sazonal ($\\nabla_{52} Y_t = (1 - B^{52}) Y_t$):** Estatística ADF = **-4.0808** (p-value = **0.0010**). Rejeita $H_0$ a 1% de significância.
-  2. **Primeira Diferença Simples ($\\nabla Y_t = (1 - B) Y_t$):** Estatística ADF = **-15.083** (p-value = **8.4021e-28**). Rejeita fortemente $H_0$.
+  1. **Diferença Sazonal ($\nabla_{52} Y_t = (1 - B^{52}) Y_t$):** Estatística ADF = **-4.0808** (p-value = **0.0010**). Rejeita $H_0$ a 1% de significância.
+  2. **Primeira Diferença Simples ($\nabla Y_t = (1 - B) Y_t$):** Estatística ADF = **-15.083** (p-value = **8.4021e-28**). Rejeita fortemente $H_0$.
 * **Tabela para o Relatório:** Inserir `tab_03_adf.csv`.
 
 ---
@@ -18,7 +18,7 @@
 ## 2. Identificação através de Correlogramas (Capítulo 4.2 — Slides 35 a 45, 51)
 * **Comportamento da FAC e FACP:**
   * Na série em níveis, a FAC decresce muito lentamente para zero, sintoma inequívoco de não estacionaridade (Slide 37 e 51).
-  * Na série diferenciada ($\\nabla Y_t$), a FAC corta abruptamente após os primeiros desfasamentos e apresenta picos sazonais no lag 52.
+  * Na série diferenciada ($\nabla Y_t$), a FAC corta abruptamente após os primeiros desfasamentos e apresenta picos sazonais no lag 52.
   * De acordo com os **Figurinos Teóricos** (Slide 45), este corte rápido na FAC com decaimento na FACP suporta a formulação de processos de médias móveis de baixa ordem (MA(1) ou MA(2)) combinados com autoregressão.
 * **Figura para o Relatório:** Inserir `fig_03_fac_facp.[png|svg]`.
 
@@ -45,11 +45,11 @@
 
 ## 5. Diagnóstico Residual e Validação de Ruído Branco (Capítulo 4.5 — Slides 55 e 70)
 * **Teste de Ljung-Box (Validação de Não-Autocorrelação):**
-  * Lag 1: $Q = 1.65$, $p\\text{-value} = 0.1989$ ($> 0.05$).
-  * Lag 10: $Q = 17.82$, $p\\text{-value} = 0.0581$ ($> 0.05$).
+  * Lag 1: $Q = 1.65$, $p\text{-value} = 0.1989$ ($> 0.05$).
+  * Lag 10: $Q = 17.82$, $p\text{-value} = 0.0581$ ($> 0.05$).
   * **Conclusão:** O teste confirma a ausência de autocorrelação linear sistemática nos resíduos a 5% de significância. O modelo filtrou a estrutura temporal da série, restando **ruído branco (*white noise*)**.
 * **Teste de Normalidade de Jarque-Bera:**
-  * $p\\text{-value} = 0.00e+00$. A hipótese nula de normalidade estrita é rejeitada devido às caudas pesadas provocadas pelos picos pontuais de *merge windows*, fenómeno clássico documentado em engenharia de sistemas.
+  * $p\text{-value} = 0.00e+00$. A hipótese nula de normalidade estrita é rejeitada devido às caudas pesadas provocadas pelos picos pontuais de *merge windows*, fenómeno clássico documentado em engenharia de sistemas.
 * **Figura para o Relatório:** Inserir `fig_04_diagnostico_residuos.[png|svg]`.
 
 ---

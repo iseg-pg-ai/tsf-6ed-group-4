@@ -38,6 +38,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+from arquitecturas_neuronais import CNN1D, GRUModel, LSTMModel, SimpleRNNModel
 from sklearn.preprocessing import MinMaxScaler
 from torch import nn
 from utils import (
@@ -50,16 +51,14 @@ from utils import (
     dividir_treino_teste,
     finalizar_script,
     guardar_figura,
-    guardar_markdown,
+    guardar_markdown_template,
     guardar_tabela,
     iniciar_script,
 )
 
 warnings.filterwarnings("ignore")
 
-
 # Configuração de Caminhos e Ambiente
-
 PNG_DIR.mkdir(parents=True, exist_ok=True)
 SVG_DIR.mkdir(parents=True, exist_ok=True)
 TABLES_DIR.mkdir(parents=True, exist_ok=True)
@@ -118,89 +117,50 @@ def criar_janelas_deslizantes(
     return np.array(X), np.array(y)
 
 
-# Definição das Arquiteturas Neuronais (Slides 81 a 105)
-class CNN1D(nn.Module):
-    """Rede Convolucional Unidimensional (Slide 81-84, 87, 92-94).
+def preparar_janelas_deslizantes(
+    train: pd.DataFrame,
+    test: pd.DataFrame,
+    features_mult: list[str],
+    window_size: int = 28,
+) -> tuple[
+    tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+    tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+    MinMaxScaler,
+]:
+    """Aplica normalização e constrói janelas deslizantes univariadas e multivariadas.
 
-    Aplica filtros temporais unidimensionais com camadas de pooling e densas.
+    O ajuste do MinMaxScaler é feito exclusivamente no treino para prevenir data leakage.
     """
+    print(f"[*] A construir janelas deslizantes (W={window_size} dias)...")
 
-    def __init__(self, n_features: int, window_size: int):
-        super().__init__()
-        self.conv1 = nn.Conv1d(in_channels=n_features, out_channels=32, kernel_size=3, padding=1)
-        self.relu1 = nn.ReLU()
-        self.pool1 = nn.MaxPool1d(kernel_size=2)
-        self.conv2 = nn.Conv1d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
-        self.relu2 = nn.ReLU()
-        self.pool2 = nn.MaxPool1d(kernel_size=2)
-        # Após dois maxpools de 2 em W=28: 28 -> 14 -> 7
-        self.flatten = nn.Flatten()
-        self.fc1 = nn.Linear(64 * (window_size // 4), 64)
-        self.relu3 = nn.ReLU()
-        self.dropout = nn.Dropout(0.2)
-        self.fc2 = nn.Linear(64, 1)
+    scaler_X = MinMaxScaler(feature_range=(0, 1))
+    scaler_y = MinMaxScaler(feature_range=(0, 1))
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x shape: (batch, window, features) -> (batch, features, window)
-        x = x.permute(0, 2, 1)
-        x = self.pool1(self.relu1(self.conv1(x)))
-        x = self.pool2(self.relu2(self.conv2(x)))
-        x = self.flatten(x)
-        x = self.dropout(self.relu3(self.fc1(x)))
-        return self.fc2(x)
+    train_scaled = scaler_X.fit_transform(train[features_mult])
+    test_scaled = scaler_X.transform(test[features_mult])
 
+    # Normalizar a variável alvo (total_commits) para o regime univariado
+    train_scaled_y = scaler_y.fit_transform(train[["total_commits"]])
+    test_scaled_y = scaler_y.transform(test[["total_commits"]])
 
-class SimpleRNNModel(nn.Module):
-    """Rede Recorrente Simples (Slide 95-96, 101).
+    # Regime Univariado (F=1)
+    X_train_uni, y_train_uni = criar_janelas_deslizantes(train_scaled_y, window_size)
+    X_test_uni, y_test_uni = criar_janelas_deslizantes(test_scaled_y, window_size)
 
-    h_t = tanh(W_x x_t + U_h h_{t-1} + b)
-    """
+    # Regime Multivariado (F=6)
+    X_train_multi, y_train_multi = criar_janelas_deslizantes(train_scaled, window_size)
+    X_test_multi, y_test_multi = criar_janelas_deslizantes(test_scaled, window_size)
 
-    def __init__(self, n_features: int, hidden_size: int = 50):
-        super().__init__()
-        self.rnn = nn.RNN(input_size=n_features, hidden_size=hidden_size, batch_first=True)
-        self.fc = nn.Linear(hidden_size, 1)
+    print(f"    -> Regime Univariado: X_train={X_train_uni.shape}, X_test={X_test_uni.shape}")
+    print(f"    -> Regime Multivariado: X_train={X_train_multi.shape}, X_test={X_test_multi.shape}")
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        out, _ = self.rnn(x)
-        return self.fc(out[:, -1, :])
+    dados_uni = (X_train_uni, y_train_uni, X_test_uni, y_test_uni)
+    dados_multi = (X_train_multi, y_train_multi, X_test_multi, y_test_multi)
+
+    return dados_uni, dados_multi, scaler_y
 
 
-class LSTMModel(nn.Module):
-    """Long Short-Term Memory (Slide 97-98, 102).
-
-    Utiliza três portas: esquecimento (forget), entrada (input) e saída (output)
-    com célula de memória (c_t).
-    """
-
-    def __init__(self, n_features: int, hidden_size: int = 50):
-        super().__init__()
-        self.lstm = nn.LSTM(input_size=n_features, hidden_size=hidden_size, batch_first=True)
-        self.fc = nn.Linear(hidden_size, 1)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        out, _ = self.lstm(x)
-        return self.fc(out[:, -1, :])
-
-
-class GRUModel(nn.Module):
-    """Gated Recurrent Unit (Slide 99, 103).
-
-    Variante simplificada da LSTM com apenas duas portas:
-    atualização (z_t) e reposição (r_t).
-    """
-
-    def __init__(self, n_features: int, hidden_size: int = 50):
-        super().__init__()
-        self.gru = nn.GRU(input_size=n_features, hidden_size=hidden_size, batch_first=True)
-        self.fc = nn.Linear(hidden_size, 1)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        out, _ = self.gru(x)
-        return self.fc(out[:, -1, :])
-
-
-# Treino e Avaliação (Slide 80, 108)
+# Treino e Avaliação de Modelos Neuronais (Slide 80, 108)
 def treinar_e_avaliar_modelo(
     nome_modelo: str,
     modelo: nn.Module,
@@ -264,9 +224,6 @@ def treinar_e_avaliar_modelo(
             val_loss = criterion(val_pred, y_val_t).item()
         val_losses.append(val_loss)
 
-        if (epoch + 1) % 10 == 0:
-            print(f"       Época {epoch + 1:3d}/{epochs} | Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f}")
-
     # Previsão no conjunto de teste
     modelo.eval()
     with torch.no_grad():
@@ -278,57 +235,48 @@ def treinar_e_avaliar_modelo(
 
     metricas = calcular_metricas(y_test_real, pred)
 
+    df_historico = pd.DataFrame({
+        "Modelo": nome_modelo,
+        "Regime": "Univariado (F=1)" if "Univariado" in nome_modelo else "Multivariado (F=6)",
+        "Época": list(range(1, epochs + 1)),
+        "Train_Loss": np.round(train_losses, 6),
+        "Val_Loss": np.round(val_losses, 6),
+    })
+
     return {
         "previsoes": pred,
         "y_real": y_test_real,
         "train_losses": train_losses,
         "val_losses": val_losses,
+        "historico": df_historico,
         "metricas": metricas,
     }
 
 
-def main():
-    iniciar_script("03", "APRENDIZAGEM PROFUNDA (DEEP LEARNING)")
-    train, test, features_mult = carregar_dados_e_preparar()
-
-    scaler_X = MinMaxScaler(feature_range=(0, 1))
-    scaler_y = MinMaxScaler(feature_range=(0, 1))
-
-    train_scaled = scaler_X.fit_transform(train[features_mult])
-    test_scaled = scaler_X.transform(test[features_mult])
-
-    # Normalizar a variável alvo (total_commits) para o regime univariado
-    train_scaled_y = scaler_y.fit_transform(train[["total_commits"]])
-    test_scaled_y = scaler_y.transform(test[["total_commits"]])
-
-    # Construção das Janelas Deslizantes (W=28 dias, Slide 85)
-    WINDOW_SIZE = 28
-    EPOCHS = 15
-    print(f"[*] A construir janelas deslizantes (W={WINDOW_SIZE} dias)...")
-
-    # Regime Univariado (F=1)
-    X_train_uni, y_train_uni = criar_janelas_deslizantes(train_scaled_y, WINDOW_SIZE)
-    X_test_uni, y_test_uni = criar_janelas_deslizantes(test_scaled_y, WINDOW_SIZE)
-
-    # Regime Multivariado (F=6)
-    X_train_multi, y_train_multi = criar_janelas_deslizantes(train_scaled, WINDOW_SIZE)
-    X_test_multi, y_test_multi = criar_janelas_deslizantes(test_scaled, WINDOW_SIZE)
-
-    print(f"    -> Regime Univariado: X_train={X_train_uni.shape}, X_test={X_test_uni.shape}")
-    print(f"    -> Regime Multivariado: X_train={X_train_multi.shape}, X_test={X_test_multi.shape}")
-
-    # Definição e Treino dos Modelos
+# Treino de modelos
+def treinar_modelos(
+    dados_uni: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+    dados_multi: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+    scaler_y: MinMaxScaler,
+    window_size: int = 28,
+    epochs: int = 15,
+) -> tuple[dict, dict, dict]:
+    """Instancia, treina e avalia as 4 arquiteturas neuronais nos regimes univariado e multivariado."""
     print("\n[*] A treinar modelos de Aprendizagem Profunda...")
+
+    X_train_uni, y_train_uni, X_test_uni, y_test_uni = dados_uni
+    X_train_multi, y_train_multi, X_test_multi, y_test_multi = dados_multi
 
     resultados = {}
     hist_loss = {}
     previsoes_teste = {}
+    historicos = []
 
     # --- Regime Univariado ---
     print("\n--- Regime Univariado (F=1: apenas total_commits) ---")
 
     modelos_uni = {
-        "1D-CNN Univariado": CNN1D(n_features=1, window_size=WINDOW_SIZE),
+        "1D-CNN Univariado": CNN1D(n_features=1, window_size=window_size),
         "SimpleRNN Univariado": SimpleRNNModel(n_features=1, hidden_size=50),
         "LSTM Univariado": LSTMModel(n_features=1, hidden_size=50),
         "GRU Univariado": GRUModel(n_features=1, hidden_size=50),
@@ -343,23 +291,20 @@ def main():
             X_test_uni,
             y_test_uni,
             scaler_y,
-            epochs=EPOCHS,
+            epochs=epochs,
             batch_size=64,
             lr=0.001,
         )
         resultados[nome] = res["metricas"]
         hist_loss[nome] = {"train": res["train_losses"], "val": res["val_losses"]}
         previsoes_teste[nome] = {"pred": res["previsoes"], "real": res["y_real"]}
-        m = res["metricas"]
-        print(
-            f"       REQM: {m['REQM']:6.2f} | EAM: {m['EAM']:6.2f} | EPAM: {m['EPAM']:5.2f}% | EPAMs: {m['EPAMs']:5.2f}%"
-        )
+        historicos.append(res["historico"])
 
     # --- Regime Multivariado ---
     print("\n--- Regime Multivariado (F=6: total_commits + exógenas + harmónicas) ---")
 
     modelos_multi = {
-        "1D-CNN Multivariado": CNN1D(n_features=6, window_size=WINDOW_SIZE),
+        "1D-CNN Multivariado": CNN1D(n_features=6, window_size=window_size),
         "SimpleRNN Multivariado": SimpleRNNModel(n_features=6, hidden_size=50),
         "LSTM Multivariado": LSTMModel(n_features=6, hidden_size=50),
         "GRU Multivariado": GRUModel(n_features=6, hidden_size=50),
@@ -374,19 +319,49 @@ def main():
             X_test_multi,
             y_test_multi,
             scaler_y,
-            epochs=EPOCHS,
+            epochs=epochs,
             batch_size=64,
             lr=0.001,
         )
         resultados[nome] = res["metricas"]
         hist_loss[nome] = {"train": res["train_losses"], "val": res["val_losses"]}
         previsoes_teste[nome] = {"pred": res["previsoes"], "real": res["y_real"]}
-        m = res["metricas"]
-        print(
-            f"       REQM: {m['REQM']:6.2f} | EAM: {m['EAM']:6.2f} | EPAM: {m['EPAM']:5.2f}% | EPAMs: {m['EPAMs']:5.2f}%"
-        )
+        historicos.append(res["historico"])
 
-    # Tabela de Hiperparâmetros (tab_06_arquiteturas_dl.csv)
+    registos = []
+    for nome in modelos_uni:
+        m = resultados[nome]
+        registos.append({
+            "Modelo": nome,
+            "Regime": "Univariado (F=1)",
+            "REQM": m["REQM"],
+            "EAM": m["EAM"],
+            "EPAM (%)": m["EPAM"],
+            "EPAMs (%)": m["EPAMs"],
+        })
+    for nome in modelos_multi:
+        m = resultados[nome]
+        registos.append({
+            "Modelo": nome,
+            "Regime": "Multivariado (F=6)",
+            "REQM": m["REQM"],
+            "EAM": m["EAM"],
+            "EPAM (%)": m["EPAM"],
+            "EPAMs (%)": m["EPAMs"],
+        })
+
+    df_dl = pd.DataFrame(registos)
+    guardar_tabela(df_dl, "deep_learning", "Tabela de Deep Learning")
+
+    df_perdas = pd.concat(historicos, ignore_index=True)
+    guardar_tabela(df_perdas, "curvas_aprendizagem", "Tabela de perdas por época")
+
+    return resultados, hist_loss, previsoes_teste
+
+
+# Geração de Tabelas (tab_06 e tab_07)
+def gerar_tabelas_dl(resultados: dict, window_size: int = 28, epochs: int = 15) -> None:
+    """Gera e grava a tabela de hiperparâmetros (tab_06) e a tabela de métricas (tab_07)."""
     print("\n[*] A gravar tabela de hiperparâmetros (tab_06_arquiteturas_dl.csv)...")
     tabela_hp = pd.DataFrame([
         {
@@ -394,101 +369,100 @@ def main():
             "Regime": "Univariado (F=1)",
             "Camadas": "Conv1D(32, k=3) + MaxPool + Conv1D(64, k=3) + MaxPool + Dense(64) + Dropout(0.2) + Dense(1)",
             "Neurónios": "32 + 64 + 64",
-            "Janela W": WINDOW_SIZE,
+            "Janela W": window_size,
             "Batch Size": 64,
             "Taxa de Aprendizagem": 0.001,
             "Otimizador": "Adam",
             "Função de Perda": "MSE",
-            "Épocas": EPOCHS,
+            "Épocas": epochs,
         },
         {
             "Modelo": "1D-CNN",
             "Regime": "Multivariado (F=6)",
             "Camadas": "Conv1D(32, k=3) + MaxPool + Conv1D(64, k=3) + MaxPool + Dense(64) + Dropout(0.2) + Dense(1)",
             "Neurónios": "32 + 64 + 64",
-            "Janela W": WINDOW_SIZE,
+            "Janela W": window_size,
             "Batch Size": 64,
             "Taxa de Aprendizagem": 0.001,
             "Otimizador": "Adam",
             "Função de Perda": "MSE",
-            "Épocas": EPOCHS,
+            "Épocas": epochs,
         },
         {
             "Modelo": "SimpleRNN",
             "Regime": "Univariado (F=1)",
             "Camadas": "RNN(50) + Dense(1)",
             "Neurónios": "50",
-            "Janela W": WINDOW_SIZE,
+            "Janela W": window_size,
             "Batch Size": 64,
             "Taxa de Aprendizagem": 0.001,
             "Otimizador": "Adam",
             "Função de Perda": "MSE",
-            "Épocas": EPOCHS,
+            "Épocas": epochs,
         },
         {
             "Modelo": "SimpleRNN",
             "Regime": "Multivariado (F=6)",
             "Camadas": "RNN(50) + Dense(1)",
             "Neurónios": "50",
-            "Janela W": WINDOW_SIZE,
+            "Janela W": window_size,
             "Batch Size": 64,
             "Taxa de Aprendizagem": 0.001,
             "Otimizador": "Adam",
             "Função de Perda": "MSE",
-            "Épocas": EPOCHS,
+            "Épocas": epochs,
         },
         {
             "Modelo": "LSTM",
             "Regime": "Univariado (F=1)",
             "Camadas": "LSTM(50) + Dense(1)",
             "Neurónios": "50",
-            "Janela W": WINDOW_SIZE,
+            "Janela W": window_size,
             "Batch Size": 64,
             "Taxa de Aprendizagem": 0.001,
             "Otimizador": "Adam",
             "Função de Perda": "MSE",
-            "Épocas": EPOCHS,
+            "Épocas": epochs,
         },
         {
             "Modelo": "LSTM",
             "Regime": "Multivariado (F=6)",
             "Camadas": "LSTM(50) + Dense(1)",
             "Neurónios": "50",
-            "Janela W": WINDOW_SIZE,
+            "Janela W": window_size,
             "Batch Size": 64,
             "Taxa de Aprendizagem": 0.001,
             "Otimizador": "Adam",
             "Função de Perda": "MSE",
-            "Épocas": EPOCHS,
+            "Épocas": epochs,
         },
         {
             "Modelo": "GRU",
             "Regime": "Univariado (F=1)",
             "Camadas": "GRU(50) + Dense(1)",
             "Neurónios": "50",
-            "Janela W": WINDOW_SIZE,
+            "Janela W": window_size,
             "Batch Size": 64,
             "Taxa de Aprendizagem": 0.001,
             "Otimizador": "Adam",
             "Função de Perda": "MSE",
-            "Épocas": EPOCHS,
+            "Épocas": epochs,
         },
         {
             "Modelo": "GRU",
             "Regime": "Multivariado (F=6)",
             "Camadas": "GRU(50) + Dense(1)",
             "Neurónios": "50",
-            "Janela W": WINDOW_SIZE,
+            "Janela W": window_size,
             "Batch Size": 64,
             "Taxa de Aprendizagem": 0.001,
             "Otimizador": "Adam",
             "Função de Perda": "MSE",
-            "Épocas": EPOCHS,
+            "Épocas": epochs,
         },
     ])
     guardar_tabela(tabela_hp, "tab_06_arquiteturas_dl")
 
-    # Tabela de Benchmark (tab_07_dl_benchmark_metricas.csv)
     print("[*] A gravar tabela de benchmark (tab_07_dl_benchmark_metricas.csv)...")
     tabela_benchmark = pd.DataFrame(
         [
@@ -502,7 +476,10 @@ def main():
     )
     guardar_tabela(tabela_benchmark, "tab_07_dl_benchmark_metricas")
 
-    # Figura de Curvas de Aprendizagem (fig_06_curvas_aprendizagem.[png|svg])
+
+# Geração de Figura (fig_06)
+def criar_figura_curvas_aprendizagem(hist_loss: dict) -> None:
+    """Gera o painel de curvas de aprendizagem (Loss Treino vs. Validação)."""
     print("[*] A gerar curvas de aprendizagem (fig_06_curvas_aprendizagem)...")
     fig, axes = plt.subplots(2, 4, figsize=(18, 8))
     fig.suptitle(
@@ -541,7 +518,15 @@ def main():
     plt.tight_layout()
     guardar_figura(fig, "fig_06_curvas_aprendizagem")
 
-    # Figura de Previsões no Teste (fig_07_previsoes_dl_teste.[png|svg])
+
+# Geração de previsões Univariadas vs Multivariadas (fig_07)
+def criar_figura_previsoes_teste(
+    test: pd.DataFrame,
+    previsoes_teste: dict,
+    resultados: dict,
+    window_size: int = 28,
+) -> None:
+    """Gera o painel duplo de previsões out-of-sample: Univariado vs. Multivariado."""
     print("[*] A gerar previsões no período de teste (fig_07_previsoes_dl_teste)...")
     fig, axes = plt.subplots(2, 1, figsize=(14, 10))
     fig.suptitle(
@@ -556,7 +541,7 @@ def main():
     ax1 = axes[0]
     y_real = previsoes_teste["GRU Univariado"]["real"]
     ax1.plot(
-        test.index[WINDOW_SIZE:],
+        test.index[window_size:],
         y_real,
         color="black",
         lw=1.8,
@@ -572,7 +557,7 @@ def main():
         p = previsoes_teste[nome]["pred"]
         epam = resultados[nome]["EPAM"]
         ax1.plot(
-            test.index[WINDOW_SIZE:],
+            test.index[window_size:],
             p,
             color=cor,
             linestyle=estilo,
@@ -593,7 +578,7 @@ def main():
     # Painel 2: Multivariado
     ax2 = axes[1]
     ax2.plot(
-        test.index[WINDOW_SIZE:],
+        test.index[window_size:],
         y_real,
         color="black",
         lw=1.8,
@@ -609,7 +594,7 @@ def main():
         p = previsoes_teste[nome]["pred"]
         epam = resultados[nome]["EPAM"]
         ax2.plot(
-            test.index[WINDOW_SIZE:],
+            test.index[window_size:],
             p,
             color=cor,
             linestyle=estilo,
@@ -630,7 +615,10 @@ def main():
     plt.tight_layout()
     guardar_figura(fig, "fig_07_previsoes_dl_teste")
 
-    # Exportação da Síntese Markdown para o Relatório
+
+# Síntese Interpretativa em Markdown (DEEP_LEARNING_SUMMARY.md)
+def exportar_resumo_dl(resultados: dict) -> None:
+    """Exporta o documento Markdown de síntese de resultados para a equipa."""
     print("[*] A exportar síntese de Deep Learning em Markdown (output/DEEP_LEARNING_SUMMARY.md)...")
 
     # Identificar o melhor modelo por REQM
@@ -651,70 +639,32 @@ def main():
             f"-> Ganho de {ganho:+.1f}%\n"
         )
 
-    conteudo = f"""# Síntese da Modelação com Aprendizagem Profunda (Deep Learning)
-**Documento de Apoio à Redação para o Elemento B (Capítulo 5 e 6 do Relatório)**  
-*Gerado automaticamente por `scripts/03_deep_learning.py`*
+    contexto: dict[str, object] = {
+        "comparacao_uni_multi": comparacao_uni_multi.rstrip("\n"),
+        "melhor_modelo": melhor_modelo,
+        "melhor_reqm": f"{melhor_metricas['REQM']:.2f}",
+        "melhor_epam": f"{melhor_metricas['EPAM']:.2f}",
+    }
 
----
+    guardar_markdown_template("deep_learning_summary.md", "DEEP_LEARNING_SUMMARY.md", contexto)
 
-## 1. Formulação por Janelas Deslizantes e Prevenção de Fuga de Informação (Slide 85)
-* **Série Utilizada:** Diária (`kernel_daily_ts.csv`, $N = 7.815$ observações, frequência `D`).
-* **Justificação da Escolha:** As redes neuronais treinadas por descida de gradiente (*backpropagation*) necessitam de milhares de pontos para convergir sem sobreajustar. A frequência diária contém micro-sazonalidade intra-semanal ($s = 7$, com quedas sistemáticas aos fins de semana), ideal para testar a capacidade das redes.
-* **Janela Deslizante ($W = 28$ dias):** Cada observação de treino é uma matriz $X \\in \\mathbb{{R}}^{{B \\times 28 \\times F}}$, onde $B$ é o tamanho do lote, $28$ são os dias de histórico (4 semanas completas) e $F$ é o número de características.
-* **Prevenção de Data Leakage:**
-  * Divisão estritamente cronológica (80% treino, 20% teste).
-  * `MinMaxScaler` ajustado **exclusivamente na amostra de treino** e aplicado à amostra de teste (sem contaminação).
-  * Divisão interna treino/validação (90:10) para monitorização de sobreajustamento durante o treino.
 
----
+# 8. Execução Principal
+def main():
 
-## 2. Arquiteturas Implementadas (Slides 81 a 105)
-* **1D-CNN (Slides 81-84, 87, 92-94):** Duas camadas convolucionais (32 e 64 filtros, kernel=3) com MaxPool, seguidas de camada densa (64 neurónios) e Dropout(0.2). Ilustra a lição do **Slide 94**: estruturas mais parcimoniosas podem superar redes profundas em séries temporais.
-* **SimpleRNN (Slides 95-96, 101):** Rede recorrente elementar com estado oculto $h_t = \\tanh(W_x x_t + U_h h_{{t-1}} + b)$. Serve de linha de base recorrente, evidenciando o desvanecimento do gradiente.
-* **LSTM (Slides 97-98, 102):** Rede recorrente com célula de memória ($c_t$) e três portas: esquecimento ($f_t$), entrada ($i_t$) e saída ($o_t$).
-* **GRU (Slides 99, 103):** Variante simplificada da LSTM com duas portas: atualização ($z_t$) e reposição ($r_t$). Habitualmente mais rápida a convergir e menos propensa a sobreajustamento.
+    WINDOW_SIZE = 28
+    EPOCHS = 15
 
----
-
-## 3. Regime Univariado vs. Multivariado (Slides 106-108)
-* **Regime Univariado ($F = 1$):** Apenas o histórico de commits diários ($Y_{{d,t}}$).
-* **Regime Multivariado ($F = 6$):** Commits diários combinados com:
-  * Contribuidores ativos diários (`unique_authors`)
-  * Code churn em escala logarítmica (`log_churn`)
-  * Ficheiros alterados (`files_changed`)
-  * Codificação harmónica do dia da semana ($\\sin$ e $\\cos$ do ciclo $s=7$)
-
-### Comparação Univariado vs. Multivariado (REQM):
-{comparacao_uni_multi}
-* **Melhor Modelo Global:** **{melhor_modelo}** com REQM = {melhor_metricas["REQM"]:.2f} e EPAM = {melhor_metricas["EPAM"]:.2f}%.
-* **Interpretação (Slide 94 e 111):** As redes recorrentes (LSTM e GRU) beneficiam significativamente da informação multivariada, capturando não-linearidades nas interações entre volume de commits, disponibilidade de contribuidores e volatilidade de código.
-
----
-
-## 4. Tabela de Benchmark (tab_07_dl_benchmark_metricas.csv)
-* **Métricas Reportadas (Slide 13):**
-  * **REQM** (Raiz do Erro Quadrático Médio / RMSE)
-  * **EAM** (Erro Absoluto Médio / MAE)
-  * **EPAM** (Erro Percentual Absoluto Médio / MAPE)
-  * **EPAMs** (Erro Percentual Absoluto Médio Simétrico / sMAPE)
-* **Previsão Estática vs. Dinâmica (Slide 108):** As métricas reportadas correspondem a previsões estáticas (passo-a-passo), onde o modelo utiliza os valores reais observados no passado imediato para prever o passo seguinte.
-
----
-
-## 5. Imagens a Incluir no Documento
-1. **`fig_06_curvas_aprendizagem.[png|svg]`:** Inserir no Capítulo 5 (Curvas de perda de treino e validação para as 4 arquiteturas em ambos os regimes).
-2. **`fig_07_previsoes_dl_teste.[png|svg]`:** Inserir no Capítulo 5/6 (Painel duplo: Univariado vs. Multivariado com sobreposição das previsões no período de teste).
-
----
-
-## 6. Prevenção de Sobreajustamento (Slide 94 e 111)
-* **Dropout (0.2):** Aplicado na camada densa da 1D-CNN para regularização.
-* **Monitorização de Validação:** As curvas de perda de validação são monitorizadas em cada época para detetar divergência (sobreajustamento).
-* **Observação do Professor Jorge Caiado (Slide 94):** "Em séries temporais, arquiteturas mais simples frequentemente superam redes profundamente parametrizadas devido ao sobreajustamento." Os resultados devem ser confrontados criticamente com esta afirmação.
-"""
-
-    guardar_markdown(conteudo, "DEEP_LEARNING_SUMMARY.md")
-
+    iniciar_script("03", "APRENDIZAGEM PROFUNDA (DEEP LEARNING)")
+    train, test, features_mult = carregar_dados_e_preparar()
+    dados_uni, dados_multi, scaler_y = preparar_janelas_deslizantes(train, test, features_mult, window_size=WINDOW_SIZE)
+    resultados, hist_loss, previsoes_teste = treinar_modelos(
+        dados_uni, dados_multi, scaler_y, window_size=WINDOW_SIZE, epochs=EPOCHS
+    )
+    gerar_tabelas_dl(resultados, window_size=WINDOW_SIZE, epochs=EPOCHS)
+    criar_figura_curvas_aprendizagem(hist_loss)
+    criar_figura_previsoes_teste(test, previsoes_teste, resultados, window_size=WINDOW_SIZE)
+    exportar_resumo_dl(resultados)
     finalizar_script("03")
 
 

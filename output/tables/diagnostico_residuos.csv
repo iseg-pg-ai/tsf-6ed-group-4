@@ -1,0 +1,7 @@
+Teste,Desfasamento,Estatística,p-value,Diagnóstico
+Jarque-Bera (Normalidade),Global,9806.28,0.0000e+00,Rejeita Normalidade (p <= 0.05)
+Ljung-Box (Ruído Branco),Lag 1,1.65,0.1989,Ruído Branco (p > 0.05)
+Ljung-Box (Ruído Branco),Lag 5,8.29,0.1411,Ruído Branco (p > 0.05)
+Ljung-Box (Ruído Branco),Lag 10,17.82,0.0581,Ruído Branco (p > 0.05)
+Ljung-Box (Ruído Branco),Lag 15,36.28,0.0016,Autocorrelação Residual
+Ljung-Box (Ruído Branco),Lag 20,38.6,0.0075,Autocorrelação Residual

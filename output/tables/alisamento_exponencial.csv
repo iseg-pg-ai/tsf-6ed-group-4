@@ -1,0 +1,4 @@
+Modelo,AIC,BIC,Alpha,Beta,Gamma,REQM,EAM,EPAM (%),EPAMs (%)
+Holt Linear,11051.82,11070.99,0.0138,0.0083,,618.21,486.28,38.86,30.04
+Holt-Winters Aditivo (s=52),11227.09,11495.59,0.0141,0.0,0.1494,643.53,510.5,41.81,31.14
+Holt-Winters Multiplicativo (s=52),11266.0,11534.49,0.0,0.0,0.0826,663.81,519.43,42.84,31.47

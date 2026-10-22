@@ -20,6 +20,7 @@ IMAGES_DIR = OUTPUT_DIR / "images"
 PNG_DIR = IMAGES_DIR / "png"
 SVG_DIR = IMAGES_DIR / "svg"
 TABLES_DIR = OUTPUT_DIR / "tables"
+TEMPLATES_DIR = ROOT_DIR / "scripts" / "templates"
 
 # Estilo visual académico partilhado por todos os scripts.
 RC_PARAMS: dict[RcKeyType, object] = {
@@ -78,10 +79,7 @@ def resumo_serie(df: pd.DataFrame, rotulo: str, unidade: str) -> None:
     """Imprime o número de observações e o intervalo temporal de uma série."""
     inicio = cast(pd.Timestamp, df.index.min())
     fim = cast(pd.Timestamp, df.index.max())
-    print(
-        f"    -> {rotulo}: {len(df)} {unidade} "
-        f"({inicio:%Y-%m-%d} a {fim:%Y-%m-%d})"
-    )
+    print(f"    -> {rotulo}: {len(df)} {unidade} ({inicio:%Y-%m-%d} a {fim:%Y-%m-%d})")
 
 
 def dividir_treino_teste(df: pd.DataFrame, unidade: str, proporcao: float = 0.80) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -124,7 +122,7 @@ def guardar_figura(fig: Figure, nome_base: str) -> None:
     fig.savefig(caminho_png)
     fig.savefig(caminho_svg)
     plt.close(fig)
-    print(f"    -> Gráficos gravados em:\n       [PNG] {caminho_png}\n       [SVG] {caminho_svg}")
+    print(f"    -> Gráficos gravados em: {IMAGES_DIR / 'PNG|SVG' / f'{nome_base}.PNG|SVG'}")
 
 
 def guardar_tabela(df: pd.DataFrame, nome_base: str, descricao: str = "Tabela") -> None:
@@ -139,3 +137,26 @@ def guardar_markdown(conteudo: str, nome_ficheiro: str, descricao: str = "Resumo
     caminho = OUTPUT_DIR / nome_ficheiro
     caminho.write_text(conteudo, encoding="utf-8")
     print(f"    -> {descricao} gravado em: {caminho}")
+
+
+def renderizar_template(nome_template: str, contexto: dict[str, object]) -> str:
+    """Carrega um ficheiro de template Markdown e substitui marcadores {{ variavel }}."""
+    caminho = TEMPLATES_DIR / nome_template
+    if not caminho.exists():
+        raise FileNotFoundError(f"Template não encontrado: {caminho}")
+
+    texto = caminho.read_text(encoding="utf-8")
+    for chave, valor in contexto.items():
+        texto = texto.replace("{{ " + chave + " }}", str(valor)).replace("{{" + chave + "}}", str(valor))
+    return texto
+
+
+def guardar_markdown_template(
+    nome_template: str,
+    nome_ficheiro: str,
+    contexto: dict[str, object],
+    descricao: str = "Resumo",
+) -> None:
+    """Renderiza um template Markdown com o contexto e grava na pasta de saída."""
+    conteudo = renderizar_template(nome_template, contexto)
+    guardar_markdown(conteudo, nome_ficheiro, descricao)
