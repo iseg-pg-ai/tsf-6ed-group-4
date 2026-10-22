@@ -7,6 +7,7 @@
 #   "seaborn",
 # ]
 # ///
+
 """
 ================================================================================
 Script 04: Consolidação do Benchmark Comparativo (Econometria vs. Deep Learning)
@@ -17,13 +18,11 @@ Docente: Prof. Jorge Caiado e Rubens Dias
 Grupo 4 - Caso de Estudo: Linux Kernel Commit Velocity (2005-2026)
 
 Objetivo:
-- Consolidar os resultados dos scripts 02 e 03 numa única Tabela Mestre (tab_06_master_benchmark_metricas.csv)
-  e numa única Figura Mestre (fig_06_master_benchmark.[png|svg]).
+- Consolidar os resultados dos scripts 02 e 03 numa única Tabela Mestre (tab_08_master_benchmark_metricas.csv)
+  e numa única Figura Mestre (fig_08_master_benchmark.[png|svg]).
 - Eliminar a confusão de nomenclatura entre os artefactos gerados individualmente.
 ================================================================================
 """
-
-from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -39,9 +38,7 @@ from utils import (
     iniciar_script,
 )
 
-# ------------------------------------------------------------------------------
-# 1. Configuração de Caminhos e Ambiente
-# ------------------------------------------------------------------------------
+# Configuração de Caminhos e Ambiente
 PNG_DIR.mkdir(parents=True, exist_ok=True)
 SVG_DIR.mkdir(parents=True, exist_ok=True)
 TABLES_DIR.mkdir(parents=True, exist_ok=True)
@@ -50,12 +47,10 @@ TABLES_DIR.mkdir(parents=True, exist_ok=True)
 plt.rcParams.update(RC_PARAMS)
 
 
-# ------------------------------------------------------------------------------
-# 2. Consolidação da Tabela Mestre (tab_06_master_benchmark_metricas.csv)
-# ------------------------------------------------------------------------------
+# Consolidação da Tabela Mestre (tab_08_master_benchmark_metricas.csv)
 def consolidar_benchmark() -> pd.DataFrame:
     """Lê os resultados dos scripts 02 e 03 e gera a Tabela Mestre consolidada."""
-    print("[*] A consolidar a Tabela Mestre de Benchmark (tab_06_master_benchmark_metricas.csv)...")
+    print("[*] A consolidar a Tabela Mestre de Benchmark (tab_08_master_benchmark_metricas.csv)...")
 
     # 1. Ler resultados dos modelos econométricos (Script 02)
     df_econ = pd.read_csv(TABLES_DIR / "tab_05_comparacao_econometrica.csv")
@@ -96,12 +91,10 @@ def consolidar_benchmark() -> pd.DataFrame:
     return df_master
 
 
-# ------------------------------------------------------------------------------
-# 3. Geração da Figura Mestre (fig_06_master_benchmark.[png|svg])
-# ------------------------------------------------------------------------------
-def gerar_figura_master(df_master: pd.DataFrame) -> tuple[Path, Path]:
+# Geração da Figura Mestre (fig_08_master_benchmark.[png|svg])
+def gerar_figura_master(df_master: pd.DataFrame) -> None:
     """Gera a Figura Mestre com a comparação de todos os modelos."""
-    print("[*] A gerar Figura Mestre de Benchmark (fig_06_master_benchmark)...")
+    print("[*] A gerar Figura Mestre de Benchmark (fig_08_master_benchmark)...")
 
     fig, ax = plt.subplots(figsize=(12, 8))
     fig.suptitle(
@@ -163,25 +156,15 @@ def gerar_figura_master(df_master: pd.DataFrame) -> tuple[Path, Path]:
     ax.legend(handles=legend_elements, loc="lower right")
 
     plt.tight_layout()
-    return guardar_figura(fig, "fig_08_master_benchmark")
+    guardar_figura(fig, "fig_08_master_benchmark")
 
 
-# ------------------------------------------------------------------------------
-# 4. Execução Principal
-# ------------------------------------------------------------------------------
 def main():
     iniciar_script("04", "CONSOLIDAÇÃO DO BENCHMARK COMPARATIVO")
-
-    # 1. Consolidar Tabela Mestre
     df_master = consolidar_benchmark()
-
-    # 2. Gerar Figura Mestre
     gerar_figura_master(df_master)
-
-    # 3. Imprimir Resumo
     print("\n[*] Resumo da Tabela Mestre:")
     print(df_master.to_string(index=False))
-
     finalizar_script("04")
 
 

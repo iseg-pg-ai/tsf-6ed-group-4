@@ -26,8 +26,6 @@ Conformidade com os Slides da Aula #0 (Slides 3 a 10):
 ================================================================================
 """
 
-from pathlib import Path
-
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -48,9 +46,7 @@ from utils import (
     resumo_serie,
 )
 
-# ------------------------------------------------------------------------------
-# 1. Configuração de Caminhos e Ambiente
-# ------------------------------------------------------------------------------
+# Configuração de Caminhos e Ambiente
 PNG_DIR.mkdir(parents=True, exist_ok=True)
 SVG_DIR.mkdir(parents=True, exist_ok=True)
 TABLES_DIR.mkdir(parents=True, exist_ok=True)
@@ -77,10 +73,8 @@ def carregar_dados() -> tuple[pd.DataFrame, pd.DataFrame]:
     return df_w, df_d
 
 
-# ------------------------------------------------------------------------------
-# 2. Matriz de Correlação entre Variáveis (fig_00 e tab_00)
-# ------------------------------------------------------------------------------
-def gerar_matriz_correlacao(df_w: pd.DataFrame) -> tuple[pd.DataFrame, Path]:
+# Matriz de Correlação entre Variáveis (fig_00 e tab_00)
+def gerar_matriz_correlacao(df_w: pd.DataFrame) -> None:
     """Gera a Figura 0 (Matriz de Correlação) e a Tabela 0 abrangendo todas as
 
     variáveis numéricas documentadas em dataset/dataset_fields_description.md:
@@ -225,15 +219,11 @@ def gerar_matriz_correlacao(df_w: pd.DataFrame) -> tuple[pd.DataFrame, Path]:
     axes[1].tick_params(axis="y", rotation=0)
 
     plt.tight_layout()
-    caminho_png, _ = guardar_figura(fig, "fig_00_matriz_correlacao")
-
-    return df_tab0, caminho_png
+    guardar_figura(fig, "fig_00_matriz_correlacao")
 
 
-# ------------------------------------------------------------------------------
-# 3. Geração da Tabela de Estatísticas Descritivas (tab_01_variaveis.csv)
-# ------------------------------------------------------------------------------
-def gerar_estatisticas_descritivas(df_w: pd.DataFrame, df_d: pd.DataFrame) -> pd.DataFrame:
+# Geração da Tabela de Estatísticas Descritivas (tab_01_variaveis.csv)
+def gerar_estatisticas_descritivas(df_w: pd.DataFrame, df_d: pd.DataFrame) -> None:
     """Calcula estatísticas sumárias formais para ambas as frequências.
 
     Métricas incluídas: N, Média, Desvio-Padrão, Mínimo, Q25, Mediana, Q75, Máximo,
@@ -295,13 +285,9 @@ def gerar_estatisticas_descritivas(df_w: pd.DataFrame, df_d: pd.DataFrame) -> pd
     tabela_df = pd.DataFrame(registos)
     guardar_tabela(tabela_df, "tab_01_variaveis")
 
-    return tabela_df
 
-
-# ------------------------------------------------------------------------------
-# 3. Geração dos Cronogramas (fig_01_cronogramas_base.png)
-# ------------------------------------------------------------------------------
-def criar_cronogramas(df_w: pd.DataFrame, df_d: pd.DataFrame) -> Path:
+# Geração dos Cronogramas (fig_01_cronogramas_base.png)
+def criar_cronogramas(df_w: pd.DataFrame, df_d: pd.DataFrame) -> None:
     """Gera o painel quádruplo de cronogramas em conformidade com as Aulas #0 e #4.
 
     Painéis:
@@ -434,16 +420,13 @@ def criar_cronogramas(df_w: pd.DataFrame, df_d: pd.DataFrame) -> Path:
     ax4.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
 
     plt.tight_layout()
-    caminho_png, _ = guardar_figura(fig, "fig_01_cronogramas_base")
-    return caminho_png
+    guardar_figura(fig, "fig_01_cronogramas_base")
 
 
-# ------------------------------------------------------------------------------
-# 4. Decomposição Aditiva e Multiplicativa (s=52) e Deteção de Outliers
-# ------------------------------------------------------------------------------
+# Decomposição Aditiva e Multiplicativa (s=52) e Deteção de Outliers
 def executar_decomposicoes_e_outliers(
     df_w: pd.DataFrame,
-) -> tuple[pd.DataFrame, Path, dict]:
+) -> tuple[pd.DataFrame, dict]:
     """Executa a decomposição aditiva e multiplicativa (s=52) e aplica a regra
 
     de deteção de outliers de resíduos (Slide 10).
@@ -684,7 +667,7 @@ def executar_decomposicoes_e_outliers(
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 
     plt.tight_layout()
-    caminho_fig2, _ = guardar_figura(fig, "fig_02_decomposicao_adit_mult")
+    guardar_figura(fig, "fig_02_decomposicao_adit_mult")
 
     # Estatísticas de diagnóstico da decomposição
     metricas_decomp = {
@@ -703,13 +686,11 @@ def executar_decomposicoes_e_outliers(
         "Max_Fator_Sazonal_Mult": round(decomp_mult.seasonal.max(), 3),
     }
 
-    return df_outliers, caminho_fig2, metricas_decomp
+    return df_outliers, metricas_decomp
 
 
-# ------------------------------------------------------------------------------
-# 5. Exportação das Notas de Síntese para a Equipa (EDA_SUMMARY.md)
-# ------------------------------------------------------------------------------
-def exportar_resumo_eda(metricas: dict, df_outliers: pd.DataFrame) -> Path:
+# Exportação das Notas de Síntese para a Equipa (EDA_SUMMARY.md)
+def exportar_resumo_eda(metricas: dict, df_outliers: pd.DataFrame) -> None:
     """Gera um documento Markdown com o resumo interpretativo em Português de Portugal
 
     para que o Elemento A possa redigir os Capítulos 2 e 3 sem ambiguidades.
@@ -763,33 +744,17 @@ def exportar_resumo_eda(metricas: dict, df_outliers: pd.DataFrame) -> Path:
 2. **`fig_02_decomposicao_adit_mult.[png|svg]`:** Inserir no Capítulo 3 como Figura 2 (Painel quádruplo comparando aditivo vs multiplicativo e assinalando os pontos vermelhos de resíduos que ultrapassam $2\\sigma$).
 """
 
-    return guardar_markdown(conteudo, "EDA_SUMMARY.md")
+    guardar_markdown(conteudo, "EDA_SUMMARY.md")
 
 
-# ------------------------------------------------------------------------------
-# 6. Execução Principal
-# ------------------------------------------------------------------------------
 def main():
     iniciar_script("01", "EDA E DECOMPOSIÇÃO TEMPORAL")
-
-    # 1. Carregar Dados
     df_w, df_d = carregar_dados()
-
-    # 2. Matriz de Correlação (fig_00, tab_00)
     gerar_matriz_correlacao(df_w)
-
-    # 3. Estatísticas Descritivas (tab_01)
     gerar_estatisticas_descritivas(df_w, df_d)
-
-    # 4. Cronogramas (fig_01)
     criar_cronogramas(df_w, df_d)
-
-    # 5. Decomposição e Outliers (tab_02, fig_02)
-    df_outliers, _, metricas = executar_decomposicoes_e_outliers(df_w)
-
-    # 6. Exportar Resumo Markdown para o Relatório
+    df_outliers, metricas = executar_decomposicoes_e_outliers(df_w)
     exportar_resumo_eda(metricas, df_outliers)
-
     finalizar_script("01")
 
 

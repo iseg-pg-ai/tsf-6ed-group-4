@@ -9,6 +9,7 @@
 #   "seaborn",
 # ]
 # ///
+
 """
 ================================================================================
 Script 03: Modelação com Aprendizagem Profunda (Deep Learning para Séries Temporais)
@@ -56,9 +57,9 @@ from utils import (
 
 warnings.filterwarnings("ignore")
 
-# ------------------------------------------------------------------------------
-# 1. Configuração de Caminhos e Ambiente
-# ------------------------------------------------------------------------------
+
+# Configuração de Caminhos e Ambiente
+
 PNG_DIR.mkdir(parents=True, exist_ok=True)
 SVG_DIR.mkdir(parents=True, exist_ok=True)
 TABLES_DIR.mkdir(parents=True, exist_ok=True)
@@ -66,15 +67,12 @@ TABLES_DIR.mkdir(parents=True, exist_ok=True)
 # Configuração visual académica (definida em utils.py)
 plt.rcParams.update(RC_PARAMS)
 
-# Configuração de dispositivo (CPU devido a incompatibilidade de Compute Capability da MX150)
+# Configuração de dispositivo (CPU devido a incompatibilidade da placa gráfica de alguns colegas)
 device = torch.device("cpu")
-print(f"[*] Dispositivo de processamento: {device} (GPU incompatível com PyTorch 2.14+cu130)")
 
 
-# ------------------------------------------------------------------------------
-# 2. Ingestão de Dados e Divisão Cronológica (80:20)
-# ------------------------------------------------------------------------------
-def carregar_dados_e_preparar() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str]]:
+# Ingestão de Dados e Divisão Cronológica (80:20)
+def carregar_dados_e_preparar() -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
     """Carrega a série diária, constrói variáveis exógenas e executa a divisão cronológica."""
     print("[*] A carregar série diária e a aplicar divisão treino/teste (80:20)...")
 
@@ -101,12 +99,10 @@ def carregar_dados_e_preparar() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFram
     # Divisão estritamente cronológica 80:20 (sem baralhar)
     train, test = dividir_treino_teste(df, "dias")
 
-    return df, train, test, features_mult
+    return train, test, features_mult
 
 
-# ------------------------------------------------------------------------------
-# 3. Formulação por Janelas Deslizantes (Sliding Windows, Slide 85)
-# ------------------------------------------------------------------------------
+# Formulação por Janelas Deslizantes (Sliding Windows, Slide 85)
 def criar_janelas_deslizantes(
     dados_scaled: np.ndarray, window_size: int, target_idx: int = 0
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -122,9 +118,7 @@ def criar_janelas_deslizantes(
     return np.array(X), np.array(y)
 
 
-# ------------------------------------------------------------------------------
-# 4. Definição das Arquiteturas Neuronais (Slides 81 a 105)
-# ------------------------------------------------------------------------------
+# Definição das Arquiteturas Neuronais (Slides 81 a 105)
 class CNN1D(nn.Module):
     """Rede Convolucional Unidimensional (Slide 81-84, 87, 92-94).
 
@@ -206,9 +200,7 @@ class GRUModel(nn.Module):
         return self.fc(out[:, -1, :])
 
 
-# ------------------------------------------------------------------------------
-# 5. Treino e Avaliação (Slide 80, 108)
-# ------------------------------------------------------------------------------
+# Treino e Avaliação (Slide 80, 108)
 def treinar_e_avaliar_modelo(
     nome_modelo: str,
     modelo: nn.Module,
@@ -287,7 +279,6 @@ def treinar_e_avaliar_modelo(
     metricas = calcular_metricas(y_test_real, pred)
 
     return {
-        "nome": nome_modelo,
         "previsoes": pred,
         "y_real": y_test_real,
         "train_losses": train_losses,
@@ -296,16 +287,10 @@ def treinar_e_avaliar_modelo(
     }
 
 
-# ------------------------------------------------------------------------------
-# 6. Execução Principal
-# ------------------------------------------------------------------------------
 def main():
     iniciar_script("03", "APRENDIZAGEM PROFUNDA (DEEP LEARNING)")
+    train, test, features_mult = carregar_dados_e_preparar()
 
-    # 1. Carregar Dados e Divisão Cronológica
-    _df, train, test, features_mult = carregar_dados_e_preparar()
-
-    # 2. Normalização (fit no treino apenas — prevenção de data leakage)
     scaler_X = MinMaxScaler(feature_range=(0, 1))
     scaler_y = MinMaxScaler(feature_range=(0, 1))
 
@@ -316,8 +301,9 @@ def main():
     train_scaled_y = scaler_y.fit_transform(train[["total_commits"]])
     test_scaled_y = scaler_y.transform(test[["total_commits"]])
 
-    # 3. Construção das Janelas Deslizantes (W=28 dias, Slide 85)
+    # Construção das Janelas Deslizantes (W=28 dias, Slide 85)
     WINDOW_SIZE = 28
+    EPOCHS = 15
     print(f"[*] A construir janelas deslizantes (W={WINDOW_SIZE} dias)...")
 
     # Regime Univariado (F=1)
@@ -331,7 +317,7 @@ def main():
     print(f"    -> Regime Univariado: X_train={X_train_uni.shape}, X_test={X_test_uni.shape}")
     print(f"    -> Regime Multivariado: X_train={X_train_multi.shape}, X_test={X_test_multi.shape}")
 
-    # 4. Definição e Treino dos Modelos
+    # Definição e Treino dos Modelos
     print("\n[*] A treinar modelos de Aprendizagem Profunda...")
 
     resultados = {}
@@ -350,7 +336,16 @@ def main():
 
     for nome, modelo in modelos_uni.items():
         res = treinar_e_avaliar_modelo(
-            nome, modelo, X_train_uni, y_train_uni, X_test_uni, y_test_uni, scaler_y, epochs=15, batch_size=64, lr=0.001
+            nome,
+            modelo,
+            X_train_uni,
+            y_train_uni,
+            X_test_uni,
+            y_test_uni,
+            scaler_y,
+            epochs=EPOCHS,
+            batch_size=64,
+            lr=0.001,
         )
         resultados[nome] = res["metricas"]
         hist_loss[nome] = {"train": res["train_losses"], "val": res["val_losses"]}
@@ -379,7 +374,7 @@ def main():
             X_test_multi,
             y_test_multi,
             scaler_y,
-            epochs=15,
+            epochs=EPOCHS,
             batch_size=64,
             lr=0.001,
         )
@@ -391,7 +386,7 @@ def main():
             f"       REQM: {m['REQM']:6.2f} | EAM: {m['EAM']:6.2f} | EPAM: {m['EPAM']:5.2f}% | EPAMs: {m['EPAMs']:5.2f}%"
         )
 
-    # 6. Tabela de Hiperparâmetros (tab_06_arquiteturas_dl.csv)
+    # Tabela de Hiperparâmetros (tab_06_arquiteturas_dl.csv)
     print("\n[*] A gravar tabela de hiperparâmetros (tab_06_arquiteturas_dl.csv)...")
     tabela_hp = pd.DataFrame([
         {
@@ -404,7 +399,7 @@ def main():
             "Taxa de Aprendizagem": 0.001,
             "Otimizador": "Adam",
             "Função de Perda": "MSE",
-            "Épocas": 50,
+            "Épocas": EPOCHS,
         },
         {
             "Modelo": "1D-CNN",
@@ -416,7 +411,7 @@ def main():
             "Taxa de Aprendizagem": 0.001,
             "Otimizador": "Adam",
             "Função de Perda": "MSE",
-            "Épocas": 50,
+            "Épocas": EPOCHS,
         },
         {
             "Modelo": "SimpleRNN",
@@ -428,7 +423,7 @@ def main():
             "Taxa de Aprendizagem": 0.001,
             "Otimizador": "Adam",
             "Função de Perda": "MSE",
-            "Épocas": 50,
+            "Épocas": EPOCHS,
         },
         {
             "Modelo": "SimpleRNN",
@@ -440,7 +435,7 @@ def main():
             "Taxa de Aprendizagem": 0.001,
             "Otimizador": "Adam",
             "Função de Perda": "MSE",
-            "Épocas": 50,
+            "Épocas": EPOCHS,
         },
         {
             "Modelo": "LSTM",
@@ -452,7 +447,7 @@ def main():
             "Taxa de Aprendizagem": 0.001,
             "Otimizador": "Adam",
             "Função de Perda": "MSE",
-            "Épocas": 50,
+            "Épocas": EPOCHS,
         },
         {
             "Modelo": "LSTM",
@@ -464,7 +459,7 @@ def main():
             "Taxa de Aprendizagem": 0.001,
             "Otimizador": "Adam",
             "Função de Perda": "MSE",
-            "Épocas": 50,
+            "Épocas": EPOCHS,
         },
         {
             "Modelo": "GRU",
@@ -476,7 +471,7 @@ def main():
             "Taxa de Aprendizagem": 0.001,
             "Otimizador": "Adam",
             "Função de Perda": "MSE",
-            "Épocas": 50,
+            "Épocas": EPOCHS,
         },
         {
             "Modelo": "GRU",
@@ -488,12 +483,12 @@ def main():
             "Taxa de Aprendizagem": 0.001,
             "Otimizador": "Adam",
             "Função de Perda": "MSE",
-            "Épocas": 50,
+            "Épocas": EPOCHS,
         },
     ])
     guardar_tabela(tabela_hp, "tab_06_arquiteturas_dl")
 
-    # 6. Tabela de Benchmark (tab_07_dl_benchmark_metricas.csv)
+    # Tabela de Benchmark (tab_07_dl_benchmark_metricas.csv)
     print("[*] A gravar tabela de benchmark (tab_07_dl_benchmark_metricas.csv)...")
     tabela_benchmark = pd.DataFrame(
         [
@@ -507,7 +502,7 @@ def main():
     )
     guardar_tabela(tabela_benchmark, "tab_07_dl_benchmark_metricas")
 
-    # 7. Figura de Curvas de Aprendizagem (fig_06_curvas_aprendizagem.[png|svg])
+    # Figura de Curvas de Aprendizagem (fig_06_curvas_aprendizagem.[png|svg])
     print("[*] A gerar curvas de aprendizagem (fig_06_curvas_aprendizagem)...")
     fig, axes = plt.subplots(2, 4, figsize=(18, 8))
     fig.suptitle(
@@ -546,7 +541,7 @@ def main():
     plt.tight_layout()
     guardar_figura(fig, "fig_06_curvas_aprendizagem")
 
-    # 8. Figura de Previsões no Teste (fig_07_previsoes_dl_teste.[png|svg])
+    # Figura de Previsões no Teste (fig_07_previsoes_dl_teste.[png|svg])
     print("[*] A gerar previsões no período de teste (fig_07_previsoes_dl_teste)...")
     fig, axes = plt.subplots(2, 1, figsize=(14, 10))
     fig.suptitle(
@@ -635,7 +630,7 @@ def main():
     plt.tight_layout()
     guardar_figura(fig, "fig_07_previsoes_dl_teste")
 
-    # 9. Exportação da Síntese Markdown para o Relatório
+    # Exportação da Síntese Markdown para o Relatório
     print("[*] A exportar síntese de Deep Learning em Markdown (output/DEEP_LEARNING_SUMMARY.md)...")
 
     # Identificar o melhor modelo por REQM

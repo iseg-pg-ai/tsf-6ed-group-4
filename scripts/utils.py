@@ -117,7 +117,7 @@ def calcular_metricas(y_true: ArrayLike, y_pred: ArrayLike) -> dict[str, float]:
     }
 
 
-def guardar_figura(fig: Figure, nome_base: str) -> tuple[Path, Path]:
+def guardar_figura(fig: Figure, nome_base: str) -> None:
     """Guarda a figura simultaneamente em PNG (alta resolução, 300 DPI) e SVG (vetorial)."""
     caminho_png = PNG_DIR / f"{nome_base}.png"
     caminho_svg = SVG_DIR / f"{nome_base}.svg"
@@ -125,20 +125,17 @@ def guardar_figura(fig: Figure, nome_base: str) -> tuple[Path, Path]:
     fig.savefig(caminho_svg)
     plt.close(fig)
     print(f"    -> Gráficos gravados em:\n       [PNG] {caminho_png}\n       [SVG] {caminho_svg}")
-    return caminho_png, caminho_svg
 
 
-def guardar_tabela(df: pd.DataFrame, nome_base: str, descricao: str = "Tabela") -> Path:
+def guardar_tabela(df: pd.DataFrame, nome_base: str, descricao: str = "Tabela") -> None:
     """Guarda um DataFrame em CSV na pasta de tabelas."""
     caminho = TABLES_DIR / f"{nome_base}.csv"
     df.to_csv(caminho, index=False)
     print(f"    -> {descricao} gravada em: {caminho}")
-    return caminho
 
 
-def guardar_markdown(conteudo: str, nome_ficheiro: str, descricao: str = "Resumo") -> Path:
+def guardar_markdown(conteudo: str, nome_ficheiro: str, descricao: str = "Resumo") -> None:
     """Grava conteúdo Markdown na pasta de saída."""
     caminho = OUTPUT_DIR / nome_ficheiro
     caminho.write_text(conteudo, encoding="utf-8")
     print(f"    -> {descricao} gravado em: {caminho}")
-    return caminho

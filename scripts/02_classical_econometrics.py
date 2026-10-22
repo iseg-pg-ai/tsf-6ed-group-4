@@ -10,6 +10,7 @@
 #   "scikit-learn",
 # ]
 # ///
+
 """
 ================================================================================
 Script 02: Modelação Econométrica Clássica (Alisamento Exponencial e Box-Jenkins)
@@ -30,7 +31,6 @@ Conformidade com os Slides das Aulas #1 a #4:
 """
 
 import warnings
-from pathlib import Path
 from typing import cast
 
 import matplotlib.dates as mdates
@@ -62,9 +62,8 @@ from utils import (
 
 warnings.filterwarnings("ignore")
 
-# ------------------------------------------------------------------------------
-# 1. Configuração de Caminhos e Ambiente
-# ------------------------------------------------------------------------------
+
+# Configuração de Caminhos e Ambiente
 PNG_DIR.mkdir(parents=True, exist_ok=True)
 SVG_DIR.mkdir(parents=True, exist_ok=True)
 TABLES_DIR.mkdir(parents=True, exist_ok=True)
@@ -73,9 +72,7 @@ TABLES_DIR.mkdir(parents=True, exist_ok=True)
 plt.rcParams.update(RC_PARAMS)
 
 
-# ------------------------------------------------------------------------------
-# 2. Ingestão de Dados e Divisão Cronológica (80:20)
-# ------------------------------------------------------------------------------
+# Ingestão de Dados e Divisão Cronológica (80:20)
 def carregar_dados_e_dividir() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Carrega a série semanal, constrói covariáveis e executa a divisão 80:20 cronológica.
 
@@ -101,9 +98,7 @@ def carregar_dados_e_dividir() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
     return df, train, test
 
 
-# ------------------------------------------------------------------------------
-# 3. Testes de Raízes Unitárias ADF (tab_03_adf.csv) — Slides 46, 52, 62
-# ------------------------------------------------------------------------------
+# Testes de Raízes Unitárias ADF (tab_03_adf.csv) — Slides 46, 52, 62
 def executar_testes_adf(train: pd.DataFrame) -> pd.DataFrame:
     """Executa a sequência metodológica de testes ADF na amostra de treino.
 
@@ -174,10 +169,8 @@ def executar_testes_adf(train: pd.DataFrame) -> pd.DataFrame:
     return df_adf
 
 
-# ------------------------------------------------------------------------------
-# 4. Correlogramas FAC e FACP (fig_03_fac_facp.[png|svg]) — Slides 35-45, 51
-# ------------------------------------------------------------------------------
-def criar_correlogramas_fac_facp(train: pd.DataFrame) -> tuple[Path, Path]:
+# Correlogramas FAC e FACP (fig_03_fac_facp.[png|svg]) — Slides 35-45, 51
+def criar_correlogramas_fac_facp(train: pd.DataFrame) -> None:
     """Gera o painel de correlogramas (FAC e FACP) comparando a série em níveis
 
     com a série diferenciada, cobrindo 60 desfasamentos (para evidenciar s=52).
@@ -248,12 +241,10 @@ def criar_correlogramas_fac_facp(train: pd.DataFrame) -> tuple[Path, Path]:
     axes[1, 1].legend(loc="upper right")
 
     plt.tight_layout()
-    return guardar_figura(fig, "fig_03_fac_facp")
+    guardar_figura(fig, "fig_03_fac_facp")
 
 
-# ------------------------------------------------------------------------------
-# 5. Modelação de Alisamento Exponencial (Holt e Holt-Winters) — Aulas #1
-# ------------------------------------------------------------------------------
+# Modelação de Alisamento Exponencial (Holt e Holt-Winters) — Aulas #1
 def modelar_alisamento_exponencial(train: pd.DataFrame, test: pd.DataFrame) -> dict:
     """Estima os modelos de alisamento exponencial (Holt Linear, Holt-Winters Aditivo e Multiplicativo).
 
@@ -323,9 +314,7 @@ def modelar_alisamento_exponencial(train: pd.DataFrame, test: pd.DataFrame) -> d
     return modelos_exp
 
 
-# ------------------------------------------------------------------------------
-# 6. Modelação ARIMA e ARIMAX com Covariáveis Exógenas — Aulas #2, #3 e #4
-# ------------------------------------------------------------------------------
+# Modelação ARIMA e ARIMAX com Covariáveis Exógenas — Aulas #2, #3 e #4
 def modelar_arima_arimax(
     train: pd.DataFrame, test: pd.DataFrame
 ) -> tuple[dict, tuple[str, SARIMAXResultsWrapper, list[str] | None]]:
@@ -434,12 +423,10 @@ def modelar_arima_arimax(
     return modelos_bj, modelo_vencedor
 
 
-# ------------------------------------------------------------------------------
-# 7. Diagnóstico dos Resíduos e Tabela Formal SARIMAX — Slides 55, 56, 70
-# ------------------------------------------------------------------------------
+# Diagnóstico dos Resíduos e Tabela Formal SARIMAX — Slides 55, 56, 70
 def executar_diagnostico_residuos(
     modelo_vencedor_info: tuple[str, SARIMAXResultsWrapper, list[str] | None],
-) -> tuple[pd.DataFrame, tuple[Path, Path], pd.DataFrame, float]:
+) -> tuple[pd.DataFrame, pd.DataFrame, float]:
     """Gera a tabela formal de estimação (tab_04_sarimax_results.csv) e o painel quádruplo
 
     de diagnóstico de resíduos para validação de ruído branco (Ljung-Box e Jarque-Bera).
@@ -561,21 +548,18 @@ def executar_diagnostico_residuos(
     axes[1, 1].set_ylabel("Autocorrelação Residual")
 
     plt.tight_layout()
-    caminhos_fig4 = guardar_figura(fig, "fig_04_diagnostico_residuos")
+    guardar_figura(fig, "fig_04_diagnostico_residuos")
 
-    return df_params, caminhos_fig4, lb_teste, jb_pval
+    return df_params, lb_teste, jb_pval
 
 
-# ------------------------------------------------------------------------------
-# 8. Comparação Out-of-Sample e Previsões (tab_05, fig_05) — Slides 13, 59, 71
-# ------------------------------------------------------------------------------
+# Comparação Out-of-Sample e Previsões (tab_05, fig_05) — Slides 13, 59, 71
 def consolidar_comparacao_econometrica(
-    df: pd.DataFrame,
     train: pd.DataFrame,
     test: pd.DataFrame,
     modelos_exp: dict,
     modelos_bj: dict,
-) -> tuple[pd.DataFrame, tuple[Path, Path]]:
+) -> pd.DataFrame:
     """Gera a tabela comparativa unificada de todos os modelos econométricos
 
     e constrói a sobreposição visual das previsões no conjunto de teste.
@@ -709,17 +693,13 @@ def consolidar_comparacao_econometrica(
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 
     plt.tight_layout()
-    caminhos_fig5 = guardar_figura(fig, "fig_05_comparacao_econometrica")
+    guardar_figura(fig, "fig_05_comparacao_econometrica")
 
-    return df_comp, caminhos_fig5
+    return df_comp
 
 
-# ------------------------------------------------------------------------------
-# 9. Projeção Futura com Holt-Winters Reajustado (class-code/2.py, Slides 27, 30, 33c)
-# ------------------------------------------------------------------------------
-def projetar_futuro_holt_winters(
-    df: pd.DataFrame, modelos_exp: dict, horizonte: int = 52
-) -> tuple[pd.DataFrame, tuple[Path, Path]]:
+# Projeção Futura com Holt-Winters Reajustado (class-code/2.py, Slides 27, 30, 33c)
+def projetar_futuro_holt_winters(df: pd.DataFrame, modelos_exp: dict, horizonte: int = 52) -> None:
     """Aplica o procedimento metodológico ensinado em class-code/2.py e no Slide 30 / 33c:
 
     Reajusta o modelo Holt-Winters com as constantes ótimas da amostra de treino
@@ -809,21 +789,17 @@ def projetar_futuro_holt_winters(
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 
     plt.tight_layout()
-    caminhos_fig5b = guardar_figura(fig, "fig_05b_previsao_futura_holtwinters")
-
-    return df_futuro, caminhos_fig5b
+    guardar_figura(fig, "fig_05b_previsao_futura_holtwinters")
 
 
-# ------------------------------------------------------------------------------
-# 9. Síntese Interpretativa para o Relatório (ECONOMETRICS_SUMMARY.md)
-# ------------------------------------------------------------------------------
+# Síntese Interpretativa para o Relatório (ECONOMETRICS_SUMMARY.md)
 def exportar_resumo_econometria(
     df_adf: pd.DataFrame,
     df_comp: pd.DataFrame,
     df_params: pd.DataFrame,
     lb_teste: pd.DataFrame,
     jb_pval: float,
-) -> Path:
+) -> None:
     """Gera um documento Markdown com o resumo interpretativo completo em Português de Portugal
 
     para que o Elemento A possa redigir o Capítulo 4 do Relatório.
@@ -911,42 +887,20 @@ def exportar_resumo_econometria(
 4. **`fig_05b_previsao_futura_holtwinters.[png|svg]`:** Inserir no Capítulo 4.3 / 7 (Projeção futura a 52 semanas com o modelo Holt-Winters reajustado à série completa).
 """
 
-    return guardar_markdown(conteudo, "ECONOMETRICS_SUMMARY.md")
+    guardar_markdown(conteudo, "ECONOMETRICS_SUMMARY.md")
 
 
-# ------------------------------------------------------------------------------
-# 10. Execução Principal
-# ------------------------------------------------------------------------------
 def main():
     iniciar_script("02", "MODELAÇÃO ECONOMÉTRICA CLÁSSICA")
-
-    # 1. Carregar Dados e Divisão Cronológica (80:20)
     df, train, test = carregar_dados_e_dividir()
-
-    # 2. Testes ADF de Raízes Unitárias (tab_03_adf.csv)
     df_adf = executar_testes_adf(train)
-
-    # 3. Correlogramas FAC e FACP (fig_03_fac_facp)
     criar_correlogramas_fac_facp(train)
-
-    # 4. Alisamento Exponencial (Holt e Holt-Winters)
     modelos_exp = modelar_alisamento_exponencial(train, test)
-
-    # 5. Modelação Box-Jenkins (ARIMA e ARIMAX)
     modelos_bj, modelo_vencedor_info = modelar_arima_arimax(train, test)
-
-    # 6. Diagnóstico Formal de Resíduos (tab_04, fig_04)
-    df_params, _, lb_teste, jb_pval = executar_diagnostico_residuos(modelo_vencedor_info)
-
-    # 7. Comparação Out-of-Sample e Previsão no Teste (tab_05, fig_05)
-    df_comp, _ = consolidar_comparacao_econometrica(df, train, test, modelos_exp, modelos_bj)
-
-    # 8. Projeção Futura com Holt-Winters Reajustado (class-code/2.py, Slide 30 / 33c)
+    df_params, lb_teste, jb_pval = executar_diagnostico_residuos(modelo_vencedor_info)
+    df_comp = consolidar_comparacao_econometrica(train, test, modelos_exp, modelos_bj)
     projetar_futuro_holt_winters(df, modelos_exp, horizonte=52)
-
-    # 9. Exportação da Síntese Markdown para o Relatório
     exportar_resumo_econometria(df_adf, df_comp, df_params, lb_teste, jb_pval)
-
     finalizar_script("02")
 
 
