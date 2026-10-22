@@ -23,44 +23,29 @@ Objetivo:
 ================================================================================
 """
 
-import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.figure import Figure
+from utils import (
+    OUTPUT_DIR,
+    PNG_DIR,
+    RC_PARAMS,
+    SVG_DIR,
+    TABLES_DIR,
+    guardar_figura,
+)
 
 # ------------------------------------------------------------------------------
 # 1. Configuração de Caminhos e Ambiente
 # ------------------------------------------------------------------------------
-ROOT_DIR = Path(__file__).resolve().parent.parent
-OUTPUT_DIR = ROOT_DIR / "output"
-IMAGES_DIR = OUTPUT_DIR / "images"
-PNG_DIR = IMAGES_DIR / "png"
-SVG_DIR = IMAGES_DIR / "svg"
-TABLES_DIR = OUTPUT_DIR / "tables"
-
 PNG_DIR.mkdir(parents=True, exist_ok=True)
 SVG_DIR.mkdir(parents=True, exist_ok=True)
 TABLES_DIR.mkdir(parents=True, exist_ok=True)
 
-# Configuração visual académica (carregada de config.json)
-CONFIG_PATH = ROOT_DIR / "config.json"
-with CONFIG_PATH.open(encoding="utf-8") as _config_file:
-    CONFIG = json.load(_config_file)
-plt.rcParams.update(CONFIG["matplotlib"]["rcParams"])
-
-
-def guardar_figura(fig: Figure, nome_base: str) -> tuple[Path, Path]:
-    """Guarda a figura simultaneamente em PNG (alta resolução, 300 DPI) e SVG (vetorial)."""
-    caminho_png = PNG_DIR / f"{nome_base}.png"
-    caminho_svg = SVG_DIR / f"{nome_base}.svg"
-    fig.savefig(caminho_png)
-    fig.savefig(caminho_svg)
-    plt.close(fig)
-    print(f"    -> Gráficos gravados em:\n       [PNG] {caminho_png}\n       [SVG] {caminho_svg}")
-    return caminho_png, caminho_svg
+# Configuração visual académica (definida em utils.py)
+plt.rcParams.update(RC_PARAMS)
 
 
 # ------------------------------------------------------------------------------

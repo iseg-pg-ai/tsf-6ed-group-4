@@ -29,7 +29,6 @@ Conformidade com os Slides das Aulas #1 a #4:
 ================================================================================
 """
 
-import json
 import warnings
 from pathlib import Path
 from typing import cast
@@ -39,7 +38,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from matplotlib.figure import Figure
 from numpy.typing import ArrayLike
 from scipy import stats
 from sklearn.metrics import mean_absolute_error, mean_squared_error
@@ -49,40 +47,27 @@ from statsmodels.stats.diagnostic import acorr_ljungbox
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from statsmodels.tsa.statespace.sarimax import SARIMAX, SARIMAXResultsWrapper
 from statsmodels.tsa.stattools import adfuller
+from utils import (
+    DATASET_DIR,
+    OUTPUT_DIR,
+    PNG_DIR,
+    RC_PARAMS,
+    SVG_DIR,
+    TABLES_DIR,
+    guardar_figura,
+)
 
 warnings.filterwarnings("ignore")
 
 # ------------------------------------------------------------------------------
 # 1. Configuração de Caminhos e Ambiente
 # ------------------------------------------------------------------------------
-ROOT_DIR = Path(__file__).resolve().parent.parent
-DATASET_DIR = ROOT_DIR / "dataset" if (ROOT_DIR / "dataset").exists() else ROOT_DIR / "Dataset"
-OUTPUT_DIR = ROOT_DIR / "output"
-IMAGES_DIR = OUTPUT_DIR / "images"
-PNG_DIR = IMAGES_DIR / "png"
-SVG_DIR = IMAGES_DIR / "svg"
-TABLES_DIR = OUTPUT_DIR / "tables"
-
 PNG_DIR.mkdir(parents=True, exist_ok=True)
 SVG_DIR.mkdir(parents=True, exist_ok=True)
 TABLES_DIR.mkdir(parents=True, exist_ok=True)
 
-# Configuração visual académica (carregada de config.json)
-CONFIG_PATH = ROOT_DIR / "config.json"
-with CONFIG_PATH.open(encoding="utf-8") as _config_file:
-    CONFIG = json.load(_config_file)
-plt.rcParams.update(CONFIG["matplotlib"]["rcParams"])
-
-
-def guardar_figura(fig: Figure, nome_base: str) -> tuple[Path, Path]:
-    """Guarda a figura simultaneamente em PNG (alta resolução, 300 DPI) e SVG (vetorial)."""
-    caminho_png = PNG_DIR / f"{nome_base}.png"
-    caminho_svg = SVG_DIR / f"{nome_base}.svg"
-    fig.savefig(caminho_png)
-    fig.savefig(caminho_svg)
-    plt.close(fig)
-    print(f"    -> Gráficos gravados em:\n       [PNG] {caminho_png}\n       [SVG] {caminho_svg}")
-    return caminho_png, caminho_svg
+# Configuração visual académica (definida em utils.py)
+plt.rcParams.update(RC_PARAMS)
 
 
 def calcular_metricas(y_true: ArrayLike, y_pred: ArrayLike) -> dict[str, float]:
