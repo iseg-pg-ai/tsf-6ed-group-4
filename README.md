@@ -13,21 +13,21 @@
 You can run this project on **both Linux / macOS and Windows**.  
 The recommended runner is [**`uv`**](https://github.com/astral-sh/uv)—it automatically manages Python versions and dependencies inline (PEP 723) without needing manual virtual environments.
 
-> **Dataset already included:** The processed time series files (`Dataset/kernel_daily_ts.csv` and `Dataset/kernel_weekly_ts.csv`) are already tracked in Git. You **do not** need to clone the ~50 GB Linux repository or extract raw commits to run models.
+> **dataset already included:** The processed time series files (`dataset/kernel_daily_ts.csv` and `dataset/kernel_weekly_ts.csv`) are already tracked in Git. You **do not** need to clone the ~50 GB Linux repository or extract raw commits to run models.
 
 ---
 
 ### Option A: Using `uv` (Recommended — Zero-Config)
 
-#### **(Optional)** Run Fast Dataset Resampling
+#### **(Optional)** Run Fast dataset Resampling
 If you want to re-generate the daily and weekly CSVs from the local commit cache (~15s):
 * **Linux / macOS:**
   ```bash
-  uv run Dataset/Extractor/extractor.py
+  uv run dataset/Extractor/extractor.py
   ```
 * **Windows:**
   ```powershell
-  uv run Dataset\Extractor\extractor.py
+  uv run dataset\Extractor\extractor.py
   ```
 
 
@@ -113,12 +113,12 @@ python scripts/04_benchmark_consolidado.py
 
 This repository contains the group project codebase and documentation for the ISEG Time Series Forecasting course. The project explores end-to-end time series analysis, econometric modeling, and deep learning forecasting applied to continuous development velocity in large-scale open-source systems.
 
-### Primary Dataset: Linux Kernel Commit Velocity
+### Primary dataset: Linux Kernel Commit Velocity
 Rather than utilizing standard financial or macroeconomic toy datasets, this project benchmarks forecasting methods on the 20-year commit history (1.39M+ commits, April 2005 – September 2026) of the **Linux Kernel mainline repository**.
 
-* **Dataset Field Descriptions & Guide:** See [**`Dataset/dataset_fields_description.md`**](Dataset/dataset_fields_description.md) for a plain-English, non-technical explanation of all 10 columns (commits, merges, unique authors, churn, net code growth) designed for collaborators and product managers.
-* **Full Pipeline & Technical Architecture:** See [**`Dataset/Extractor/README.md`**](Dataset/Extractor/README.md) for architectural details, parallel extraction benchmarks, and academic syllabus mapping.
-* **Extraction Script:** [`Dataset/Extractor/extractor.py`](Dataset/Extractor/extractor.py) — Multi-core parallel Map-Reduce script that extracts raw Git commits and resamples them into uniform Daily (`D`) and Weekly (`W-MON`) time series tables.
+* **dataset Field Descriptions & Guide:** See [**`dataset/dataset_fields_description.md`**](dataset/dataset_fields_description.md) for a plain-English, non-technical explanation of all 10 columns (commits, merges, unique authors, churn, net code growth) designed for collaborators and product managers.
+* **Full Pipeline & Technical Architecture:** See [**`dataset/Extractor/README.md`**](dataset/Extractor/README.md) for architectural details, parallel extraction benchmarks, and academic syllabus mapping.
+* **Extraction Script:** [`dataset/Extractor/extractor.py`](dataset/Extractor/extractor.py) — Multi-core parallel Map-Reduce script that extracts raw Git commits and resamples them into uniform Daily (`D`) and Weekly (`W-MON`) time series tables.
 
 ---
 
@@ -126,7 +126,7 @@ Rather than utilizing standard financial or macroeconomic toy datasets, this pro
 
 ```
 .
-├── Dataset/                              # Processed time series ready for econometric modeling
+├── dataset/                              # Processed time series ready for econometric modeling
 │   ├── dataset_fields_description.md     # Non-technical guide to all columns and metrics
 │   ├── kernel_daily_ts.csv               # Daily time series (D, s=7 micro-seasonality)
 │   ├── kernel_weekly_ts.csv              # Weekly time series (W-MON, Mondays, s=52 macro-seasonality)

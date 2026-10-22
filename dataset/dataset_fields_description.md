@@ -1,4 +1,4 @@
-# Linux Kernel Time Series Dataset: Field Descriptions & Field Guide
+# Linux Kernel Time Series dataset: Field Descriptions & Field Guide
 *A Non-Technical Guide for Software Collaborators, Product Managers, and Business Analysts*
 
 ---
@@ -8,8 +8,10 @@
 Welcome! If you work alongside software engineers—as a **Product Manager, Project Manager, Scrum Master, Business Analyst, QA Specialist, Technical Writer, or Operations Lead**—you frequently hear terms like *commits*, *pull requests*, *merges*, and *code churn*. 
 
 This document explains the data fields contained in two foundational files:
-* **`Dataset/kernel_daily_ts.csv`** (daily aggregated development activity)
-* **`Dataset/kernel_weekly_ts.csv`** (weekly aggregated development activity, sampled every Monday)
+* **`dataset/kernel_daily_ts.csv`** (daily aggregated development activity)
+* **`dataset/kernel_weekly_ts.csv`** (weekly aggregated development activity, sampled every Monday)
+
+The last five columns of both files are derived from a third, much smaller file — **`dataset/kernel_releases.csv`**, the Linux Kernel release calendar — which the extractor reads straight from the project's own Git tags.
 
 Both datasets track the evolution of the **Linux Kernel**—one of the largest, most critical open-source engineering projects in human history—spanning over 20 years (from April 2005 to September 2026) and more than 1.39 million individual code contributions.
 
@@ -32,9 +34,9 @@ Before diving into the columns, here are four simple concepts that explain how s
 
 ---
 
-## 3. Daily vs. Weekly Datasets: Why Are There Two Files?
+## 3. Daily vs. Weekly datasets: Why Are There Two Files?
 
-Both files have the **exact same columns**, but they look at the project through different zoom lenses:
+Both files have the **exact same 15 columns** (10 activity metrics plus 5 release-cycle fields), but they look at the project through different zoom lenses:
 
 | Aspect | `kernel_daily_ts.csv` (Daily) | `kernel_weekly_ts.csv` (Weekly) |
 | :--- | :--- | :--- |
@@ -46,7 +48,7 @@ Both files have the **exact same columns**, but they look at the project through
 
 ## 4. Detailed Column-by-Column Reference
 
-Here is what each of the **10 columns** means, accompanied by concrete examples drawn directly from the first 10 rows of both datasets.
+Here is what each of the **15 columns** means. The first ten are measured directly from the commit history and are illustrated with concrete examples drawn from the first 10 rows of both datasets. The last five are derived from the project's release calendar and are illustrated with the pattern they produce.
 
 ---
 
@@ -64,7 +66,7 @@ Imagine a developer writes a code patch on a Tuesday (`author_date`), but it get
 * **In `kernel_daily_ts.csv`:**  
   Row 1 is `2005-04-16` (a Saturday). This is the exact historic day Linus Torvalds introduced Git to the Linux project. Row 2 is `2005-04-17`, Row 3 is `2005-04-18`, and so on.
 * **In `kernel_weekly_ts.csv`:**  
-  Row 1 is `2005-04-18` (Monday). Every subsequent row advances by exactly 7 days: `2005-04-25`, `2005-05-02`, `2005-05-09`, etc. All changes made between Monday and Sunday are rolled up into that Monday's row.
+  Row 1 is `2005-04-18` (Monday). Every subsequent row advances by exactly 7 days: `2005-04-25`, `2005-05-02`, `2005-05-09`, etc. Each row aggregates the seven days **ending on** that Monday, so the label marks the end of the window rather than its start.
 
 #### Why Collaborators Care
 It is your timeline anchor. It allows you to align development velocity with real-world business events (product launches, holidays, conferences, or release deadlines).
@@ -266,6 +268,93 @@ Tells you the trajectory of the product. Sustained positive growth means the sys
 
 ---
 
+### Column 11: `last_release_tag`
+* **Plain-English Name:** The Release This Period Belongs To
+* **Data Type:** Text (for example `v6.12`); may be empty
+
+#### What It Means in Practice
+The Linux Kernel is not shipped as one continuous stream. Every few months the accumulated work is frozen, tested, and published as a numbered **release**. This column records which release was the most recent one still in force when the period began.
+
+Only **final** releases appear here. The intermediate release candidates (`-rc1`, `-rc2`, ...) are tracked separately and never fill this column, because they are working milestones rather than shipped products.
+
+#### Example Pattern
+* A period whose `last_release_tag` is `v6.12` belongs to the cycle that will conclude with the following release.
+* The same type of week recurs in every cycle with a different tag, which is exactly what makes the field useful for grouping.
+
+#### Why Collaborators Care
+It lets you roll period-level numbers up to release-level numbers without guessing where the boundaries are. If someone asks *"how much work went into the 6.13 release?"*, you can answer by grouping on this column instead of reconstructing dates by hand.
+
+---
+
+### Column 12: `last_release_date`
+* **Plain-English Name:** When That Release Shipped
+* **Data Type:** ISO-8601 Date (`YYYY-MM-DD`); may be empty
+
+#### What It Means in Practice
+The publication date of the release named in `last_release_tag`. It is the anchor from which the release-cycle clock in `weeks_since_release` counts.
+
+#### Example Pattern
+`last_release_tag` and `last_release_date` describe the same event from two angles: which version shipped, and when. Reading them together prevents ambiguity when two cycles share a similar volume of activity.
+
+#### Why Collaborators Care
+It gives you a hard calendar reference for any downstream chart or commitment, and it makes the release-cycle columns auditable: every derived value can be traced back to a real, dated publication.
+
+---
+
+### Column 13: `weeks_since_release`
+* **Plain-English Name:** The Release-Cycle Clock
+* **Data Type:** Whole Number (Integer $\ge 0$); may be empty
+
+#### What It Means in Practice
+How many whole weeks have passed since the last release. The clock restarts at `0` right after a release and climbs one step per week until the next release resets it.
+
+Two details matter:
+
+* **It is measured at the *start* of the period.** The week in which a release actually lands still reports the age of the *previous* cycle, because the bulk of that week's work was completed before the release. The counter restarts in the week that follows.
+* **It only ever looks backwards.** The field is built exclusively from releases that had already happened. It never uses the date of the next release, so it cannot leak knowledge of the future into a model.
+
+#### Historical Note
+Before December 2014 the kernel shipped on an irregular schedule, and long gaps push this value well above `10`. From December 2014 onwards the project settled into a regular rhythm of roughly nine to ten weeks per cycle, so the field typically ranges from `0` to `9`.
+
+#### Why Collaborators Care
+This is the most useful column for explaining why some weeks are busy and others are quiet. It converts *"we had a good week"* into *"we were in week 1 of the cycle"*, which is a statement that can actually be planned around.
+
+---
+
+### Column 14: `is_merge_window`
+* **Plain-English Name:** Planned Integration Surge Flag
+* **Data Type:** `1` or `0`; may be empty
+
+#### What It Means in Practice
+`1` marks the **merge window**: the roughly two-week period immediately after a release, when subsystem maintainers submit the work they have been accumulating while the code was frozen. In this dataset the flag is simply `weeks_since_release` equal to `0` or `1`.
+
+#### Why Collaborators Care
+This is the column that separates a **planned burst** from organic growth. A spike in `total_commits` while `is_merge_window = 1` is business as usual and should not be read as a sudden productivity gain; the same spike while `is_merge_window = 0` deserves a much closer look.
+
+---
+
+### Column 15: `rc_week`
+* **Plain-English Name:** Stabilisation Week Counter
+* **Data Type:** Whole Number (Integer $\ge 0$); may be empty
+
+#### What It Means in Practice
+Once the merge window closes, the project enters the **release-candidate (rc) phase**: new features are refused and only corrections are accepted. This column counts those weeks — `1` for the first rc week, `2` for the second, and so on until the next release.
+
+A value of `0` means the period belongs to the merge window rather than the stabilisation phase. It does **not** mean "no activity".
+
+#### Why Collaborators Care
+The two phases differ in the *character* of the work, not only in its volume: the merge window brings large structural changes, while the rc phase brings small, targeted fixes. If your QA effort is keyed to risk, this column tells you which kind of work to expect.
+
+---
+
+### About the Release Calendar
+
+All five are derived from **`dataset/kernel_releases.csv`**, a compact table of the kernel's own release tags with the columns `tag`, `release_date`, `is_rc`, `rc_number`, `version_major`, `version_minor` and `version_patch`. It is regenerated directly from Git, independently of the 1.39M-commit history, and can be refreshed on its own.
+
+**Empty is not zero.** Where these five columns are empty, it means no release had been recorded before that period — not that the period had no activity. This can only happen at the very beginning of the series, where the Git history starts before the first available release tag.
+
+---
+
 ## 5. Summary Cheat Sheet: How All Fields Connect
 
 The following balance-sheet equations link the columns together:
@@ -284,6 +373,19 @@ net_code_growth = insertions - deletions
 Average Commits per Author = total_commits / unique_authors
 ```
 
+The five release-cycle fields are not balance identities; they follow three definitions:
+
+```
+[ Release-Cycle Clock ]
+weeks_since_release = whole weeks between the start of the period and the last final release
+
+[ Surge Flag ]
+is_merge_window = 1 when weeks_since_release is 0 or 1, otherwise 0
+
+[ Stabilisation Counter ]
+rc_week = max(0, weeks_since_release - 1)
+```
+
 ### Quick Reference Matrix
 
 | Column | Plain-English Concept | Can Be Negative? | What High Values Mean |
@@ -298,6 +400,11 @@ Average Commits per Author = total_commits / unique_authors
 | **`deletions`** | Lines removed (`-`) | No | Active code cleanup, legacy feature removal |
 | **`total_churn`** | Total lines modified (`+` and `-`) | No | High volatility; heavy QA and testing required |
 | **`net_code_growth`** | Net line difference (`+` minus `-`) | **YES** | Positive = project growing; Negative = codebase slimming down |
+| **`last_release_tag`** | Which release was in force | No | Not applicable (text); newer tags = more recently shipped version |
+| **`last_release_date`** | When that release shipped | No | Not applicable (date); later dates = closer to the present |
+| **`weeks_since_release`** | Release-cycle clock | No | Later in the cycle; stabilisation work, lower volume |
+| **`is_merge_window`** | Planned integration surge (`1`/`0`) | No | The two-week post-release push |
+| **`rc_week`** | Stabilisation week counter | No | Later rc stage; closer to the next release |
 
 ---
 
@@ -363,6 +470,10 @@ When collaborating with developers and engineering leads, you can use these metr
    *(Helps align product delivery timelines).*
 4. **"Our `net_code_growth` has been negative for three weeks straight. Great job cleaning up technical debt!"**  
    *(Celebrates quality and simplification, not just raw volume).*
+5. **"`total_commits` doubled but `is_merge_window` is 1 — is that the planned integration surge, or are we simply delivering late?"**  
+   *(Separates the predictable post-release push from genuine schedule slippage, which is the difference between a healthy cadence and a team in trouble).*
+6. **"`weeks_since_release` is sitting at 9 and the next release has not shipped. Was the cycle extended on purpose?"**  
+   *(A stretched cycle usually signals either a large batch of late-arriving work or a quality problem that delayed the stabilisation phase).*
 
 ---
 

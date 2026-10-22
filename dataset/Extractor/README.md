@@ -1,4 +1,4 @@
-# Linux Kernel Time Series Dataset Pipeline
+# Linux Kernel Time Series dataset Pipeline
 
 ## 1. Executive Summary & Motivation
 
@@ -46,17 +46,17 @@ Extracting churn and diff metrics across 1.39M+ commits sequentially on a single
                            Worker 2 ──> git log --no-walk=unsorted --stdin ──> chunk_00002.csv
                            Worker k ──> [Dynamic queue prevents stragglers] ──> chunk_00042.csv
                                                       │
-[4. Reduce Phase]        Stream-merge chunk CSVs ──> Dataset/Extractor/kernel_raw_commits.csv
+[4. Reduce Phase]        Stream-merge chunk CSVs ──> dataset/Extractor/kernel_raw_commits.csv
                                                       │
-[5. Vectorized TS]       Single-pass Pandas resample ──> Dataset/kernel_daily_ts.csv
-                                                     ──> Dataset/kernel_weekly_ts.csv
+[5. Vectorized TS]       Single-pass Pandas resample ──> dataset/kernel_daily_ts.csv
+                                                     ──> dataset/kernel_weekly_ts.csv
 ```
 
 ### Architectural Highlights
 * **Instant Discovery via DAG Traversal:** `git rev-list --all` scans commit objects without unpacking trees or blobs, collecting 1.39M hashes in under 2 seconds.
 * **Dynamic Load Balancing:** Commit diff complexity follows a heavy-tailed power law (a 2-line fix vs. a 50,000-line driver import). Fixed partitioning causes stragglers; micro-chunks (10,000 commits) paired with `pool.imap_unordered` ensure fast workers immediately pull new work, saturating all CPU cores.
 * **Streaming `--no-walk=unsorted`:** Bypasses Git's internal in-memory sorting and buffers, streaming diff stats straight into per-worker chunk files without inter-process communication (IPC) overhead or Python GIL contention.
-* **Directory Layout Decoupling:** Raw commit telemetry stays isolated in `Dataset/Extractor/`, while the resampled time series ready for modeling are written directly to the parent `Dataset/` directory.
+* **Directory Layout Decoupling:** Raw commit telemetry stays isolated in `dataset/Extractor/`, while the resampled time series ready for modeling are written directly to the parent `dataset/` directory.
 * **Smart Cache:** If `kernel_raw_commits.csv` is already present on disk, the script skips Git extraction entirely and immediately generates the resampled tables in ~2 seconds.
 
 ---
@@ -77,10 +77,10 @@ The script uses standard PEP 723 metadata, so `uv` automatically handles depende
 
 ```bash
 # Run from workspace root:
-uv run Dataset/Extractor/extractor.py
+uv run dataset/Extractor/extractor.py
 
 # Or run from the Extractor directory:
-cd Dataset/Extractor
+cd dataset/Extractor
 uv run extractor.py
 
 # Force full re-extraction from Git from scratch:
@@ -95,7 +95,7 @@ uv run extractor.py /path/to/another/repo.git --workers 8 --force-extract
 ## 5. Output Data Schema & Directory Layout
 
 ```
-Dataset/
+dataset/
 ├── kernel_daily_ts.csv        # Resampled Daily time series (s=7 seasonality)
 ├── kernel_weekly_ts.csv       # Resampled Weekly time series (Mondays)
 └── Extractor/
@@ -104,7 +104,7 @@ Dataset/
     └── kernel_raw_commits.csv # Granular commit-level history (~1.4M rows)
 ```
 
-### File 1: `Dataset/Extractor/kernel_raw_commits.csv`
+### File 1: `dataset/Extractor/kernel_raw_commits.csv`
 Granular, event-level table containing all ~1.4M commits.
 
 | Column | Type | Description |
@@ -120,8 +120,8 @@ Granular, event-level table containing all ~1.4M commits.
 
 ---
 
-### Files 2 & 3: `Dataset/kernel_daily_ts.csv` & `Dataset/kernel_weekly_ts.csv`
-Equidistant time series tables resampled to **Daily (`D`)** and **Weekly on Mondays (`W-MON`)** located in the `Dataset/` directory.
+### Files 2 & 3: `dataset/kernel_daily_ts.csv` & `dataset/kernel_weekly_ts.csv`
+Equidistant time series tables resampled to **Daily (`D`)** and **Weekly on Mondays (`W-MON`)** located in the `dataset/` directory.
 
 | Column | Role | Formula / Aggregation | Description |
 | :--- | :--- | :--- | :--- |

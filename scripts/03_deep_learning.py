@@ -37,17 +37,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.preprocessing import MinMaxScaler
 from torch import nn
 from utils import (
-    DATASET_DIR,
-    OUTPUT_DIR,
     PNG_DIR,
     RC_PARAMS,
     SVG_DIR,
     TABLES_DIR,
+    calcular_metricas,
+    carregar_serie_temporal,
+    dividir_treino_teste,
+    finalizar_script,
     guardar_figura,
+    guardar_markdown,
+    guardar_tabela,
+    iniciar_script,
 )
 
 warnings.filterwarnings("ignore")
@@ -67,24 +71,6 @@ device = torch.device("cpu")
 print(f"[*] Dispositivo de processamento: {device} (GPU incompatível com PyTorch 2.14+cu130)")
 
 
-def calcular_metricas(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
-    """Calcula as quatro métricas obrigatórias da disciplina (Slide 13 e 108)."""
-    y_true = np.asarray(y_true, dtype=float)
-    y_pred = np.asarray(y_pred, dtype=float)
-
-    reqm = np.sqrt(mean_squared_error(y_true, y_pred))
-    eam = mean_absolute_error(y_true, y_pred)
-    epam = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
-    epams = np.mean(200.0 * np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred)))
-
-    return {
-        "REQM": round(float(reqm), 2),
-        "EAM": round(float(eam), 2),
-        "EPAM": round(float(epam), 2),
-        "EPAMs": round(float(epams), 2),
-    }
-
-
 # ------------------------------------------------------------------------------
 # 2. Ingestão de Dados e Divisão Cronológica (80:20)
 # ------------------------------------------------------------------------------
@@ -92,16 +78,7 @@ def carregar_dados_e_preparar() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFram
     """Carrega a série diária, constrói variáveis exógenas e executa a divisão cronológica."""
     print("[*] A carregar série diária e a aplicar divisão treino/teste (80:20)...")
 
-    caminho_diario = DATASET_DIR / "kernel_daily_ts.csv"
-    if not caminho_diario.exists():
-        raise FileNotFoundError(f"Ficheiro não encontrado: {caminho_diario}")
-
-    df = pd.read_csv(
-        caminho_diario,
-        parse_dates=["committer_date"],
-        index_col="committer_date",
-    ).iloc[:-1]
-    df.index.freq = "D"
+    df = carregar_serie_temporal("kernel_daily_ts.csv", "D")
 
     # Transformação logarítmica do code churn para estabilização de variância
     df["log_churn"] = np.log1p(df["total_churn"])
@@ -122,21 +99,7 @@ def carregar_dados_e_preparar() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFram
     ]
 
     # Divisão estritamente cronológica 80:20 (sem baralhar)
-    n_total = len(df)
-    n_treino = int(0.80 * n_total)
-
-    train = df.iloc[:n_treino].copy()
-    test = df.iloc[n_treino:].copy()
-
-    print(
-        f"    -> Amostra total: {n_total} dias ({df.index.min().strftime('%Y-%m-%d')} a {df.index.max().strftime('%Y-%m-%d')})"
-    )
-    print(
-        f"    -> Amostra de treino (80%): {len(train)} dias ({train.index.min().strftime('%Y-%m-%d')} a {train.index.max().strftime('%Y-%m-%d')})"
-    )
-    print(
-        f"    -> Amostra de teste  (20%): {len(test)} dias ({test.index.min().strftime('%Y-%m-%d')} a {test.index.max().strftime('%Y-%m-%d')})"
-    )
+    train, test = dividir_treino_teste(df, "dias")
 
     return df, train, test, features_mult
 
@@ -337,9 +300,7 @@ def treinar_e_avaliar_modelo(
 # 6. Execução Principal
 # ------------------------------------------------------------------------------
 def main():
-    print("=" * 80)
-    print("INÍCIO DO SCRIPT 03: APRENDIZAGEM PROFUNDA (DEEP LEARNING)")
-    print("=" * 80)
+    iniciar_script("03", "APRENDIZAGEM PROFUNDA (DEEP LEARNING)")
 
     # 1. Carregar Dados e Divisão Cronológica
     _df, train, test, features_mult = carregar_dados_e_preparar()
@@ -530,9 +491,7 @@ def main():
             "Épocas": 50,
         },
     ])
-    caminho_tab6 = TABLES_DIR / "tab_06_arquiteturas_dl.csv"
-    tabela_hp.to_csv(caminho_tab6, index=False)
-    print(f"    -> Tabela gravada com sucesso em: {caminho_tab6}")
+    guardar_tabela(tabela_hp, "tab_06_arquiteturas_dl")
 
     # 6. Tabela de Benchmark (tab_07_dl_benchmark_metricas.csv)
     print("[*] A gravar tabela de benchmark (tab_07_dl_benchmark_metricas.csv)...")
@@ -546,9 +505,7 @@ def main():
             for nome in ["1D-CNN Multivariado", "SimpleRNN Multivariado", "LSTM Multivariado", "GRU Multivariado"]
         ]
     )
-    caminho_tab6b = TABLES_DIR / "tab_07_dl_benchmark_metricas.csv"
-    tabela_benchmark.to_csv(caminho_tab6b, index=False)
-    print(f"    -> Tabela gravada com sucesso em: {caminho_tab6b}")
+    guardar_tabela(tabela_benchmark, "tab_07_dl_benchmark_metricas")
 
     # 7. Figura de Curvas de Aprendizagem (fig_06_curvas_aprendizagem.[png|svg])
     print("[*] A gerar curvas de aprendizagem (fig_06_curvas_aprendizagem)...")
@@ -680,7 +637,6 @@ def main():
 
     # 9. Exportação da Síntese Markdown para o Relatório
     print("[*] A exportar síntese de Deep Learning em Markdown (output/DEEP_LEARNING_SUMMARY.md)...")
-    caminho_md = OUTPUT_DIR / "DEEP_LEARNING_SUMMARY.md"
 
     # Identificar o melhor modelo por REQM
     melhor_modelo = min(resultados, key=lambda k: resultados[k]["REQM"])
@@ -762,15 +718,9 @@ def main():
 * **Observação do Professor Jorge Caiado (Slide 94):** "Em séries temporais, arquiteturas mais simples frequentemente superam redes profundamente parametrizadas devido ao sobreajustamento." Os resultados devem ser confrontados criticamente com esta afirmação.
 """
 
-    with open(caminho_md, "w", encoding="utf-8") as f:
-        f.write(conteudo)
+    guardar_markdown(conteudo, "DEEP_LEARNING_SUMMARY.md")
 
-    print(f"    -> Resumo gravado em: {caminho_md}")
-
-    print("=" * 80)
-    print("[OK] SCRIPT 03 CONCLUÍDO COM SUCESSO!")
-    print(f"    Ficheiros gerados em: {OUTPUT_DIR.resolve()}")
-    print("=" * 80)
+    finalizar_script("03")
 
 
 if __name__ == "__main__":

@@ -35,13 +35,17 @@ import seaborn as sns
 from scipy import stats
 from statsmodels.tsa.seasonal import seasonal_decompose
 from utils import (
-    DATASET_DIR,
-    OUTPUT_DIR,
     PNG_DIR,
     RC_PARAMS,
     SVG_DIR,
     TABLES_DIR,
+    carregar_serie_temporal,
+    finalizar_script,
     guardar_figura,
+    guardar_markdown,
+    guardar_tabela,
+    iniciar_script,
+    resumo_serie,
 )
 
 # ------------------------------------------------------------------------------
@@ -64,33 +68,11 @@ def carregar_dados() -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     print("[*] A carregar dados brutos das séries temporais...")
 
-    caminho_semanal = DATASET_DIR / "kernel_weekly_ts.csv"
-    caminho_diario = DATASET_DIR / "kernel_daily_ts.csv"
+    df_w = carregar_serie_temporal("kernel_weekly_ts.csv", "W-MON")
+    df_d = carregar_serie_temporal("kernel_daily_ts.csv", "D")
 
-    if not caminho_semanal.exists() or not caminho_diario.exists():
-        raise FileNotFoundError(
-            f"Ficheiros não encontrados em {DATASET_DIR}. "
-            "Certifique-se de que os dados estão presentes na pasta Dataset/."
-        )
-
-    # 1. Série Semanal (W-MON)
-    df_w = pd.read_csv(
-        caminho_semanal,
-        parse_dates=["committer_date"],
-        index_col="committer_date",
-    ).iloc[:-1]
-    df_w.index.freq = "W-MON"
-
-    # 2. Série Diária (D)
-    df_d = pd.read_csv(caminho_diario, parse_dates=["committer_date"], index_col="committer_date").iloc[:-1]
-    df_d.index.freq = "D"
-
-    print(
-        f"    -> Série Semanal limpa: {len(df_w)} observações ({df_w.index.min().strftime('%Y-%m-%d')} a {df_w.index.max().strftime('%Y-%m-%d')})"
-    )
-    print(
-        f"    -> Série Diária limpa: {len(df_d)} observações ({df_d.index.min().strftime('%Y-%m-%d')} a {df_d.index.max().strftime('%Y-%m-%d')})"
-    )
+    resumo_serie(df_w, "Série Semanal limpa", "observações")
+    resumo_serie(df_d, "Série Diária limpa", "observações")
 
     return df_w, df_d
 
@@ -176,9 +158,7 @@ def gerar_matriz_correlacao(df_w: pd.DataFrame) -> tuple[pd.DataFrame, Path]:
         registos_corr.append(linha)
 
     df_tab0 = pd.DataFrame(registos_corr)
-    caminho_tab0 = TABLES_DIR / "tab_00_matriz_correlacao.csv"
-    df_tab0.to_csv(caminho_tab0, index=False)
-    print(f"    -> Tabela de correlações gravada com sucesso em: {caminho_tab0}")
+    guardar_tabela(df_tab0, "tab_00_matriz_correlacao", "Tabela de correlações")
 
     # 2. Construção da Figura 0 (Painel duplo: Pearson s/ outlier 2005 vs. Spearman)
     fig, axes = plt.subplots(1, 2, figsize=(16, 7.5))
@@ -313,9 +293,7 @@ def gerar_estatisticas_descritivas(df_w: pd.DataFrame, df_d: pd.DataFrame) -> pd
     })
 
     tabela_df = pd.DataFrame(registos)
-    caminho_csv = TABLES_DIR / "tab_01_variaveis.csv"
-    tabela_df.to_csv(caminho_csv, index=False)
-    print(f"    -> Tabela gravada com sucesso em: {caminho_csv}")
+    guardar_tabela(tabela_df, "tab_01_variaveis")
 
     return tabela_df
 
@@ -533,10 +511,8 @@ def executar_decomposicoes_e_outliers(
         })
 
     df_outliers = pd.DataFrame(registos_outliers).sort_values(by="Data", ascending=True)
-    caminho_outliers = TABLES_DIR / "tab_02_outliers.csv"
-    df_outliers.to_csv(caminho_outliers, index=False)
     print(f"    -> Deteção de outliers concluída: {len(df_outliers)} semanas identificadas (|Z| > 2).")
-    print(f"    -> Tabela gravada em: {caminho_outliers}")
+    guardar_tabela(df_outliers, "tab_02_outliers")
 
     # 4. Construção do Painel Visual de Decomposição (fig_02_decomposicao_adit_mult.png)
     print("[*] A construir figura comparativa de decomposição (fig_02_decomposicao_adit_mult.png)...")
@@ -740,8 +716,6 @@ def exportar_resumo_eda(metricas: dict, df_outliers: pd.DataFrame) -> Path:
     """
     print("[*] A exportar síntese de resultados em Markdown (output/EDA_SUMMARY.md)...")
 
-    caminho_md = OUTPUT_DIR / "EDA_SUMMARY.md"
-
     picos_pos = df_outliers[df_outliers["Classificação"].str.contains("Positivo")]
     quedas_neg = df_outliers[df_outliers["Classificação"].str.contains("Negativa")]
 
@@ -789,20 +763,14 @@ def exportar_resumo_eda(metricas: dict, df_outliers: pd.DataFrame) -> Path:
 2. **`fig_02_decomposicao_adit_mult.[png|svg]`:** Inserir no Capítulo 3 como Figura 2 (Painel quádruplo comparando aditivo vs multiplicativo e assinalando os pontos vermelhos de resíduos que ultrapassam $2\\sigma$).
 """
 
-    with open(caminho_md, "w", encoding="utf-8") as f:
-        f.write(conteudo)
-
-    print(f"    -> Resumo gravado em: {caminho_md}")
-    return caminho_md
+    return guardar_markdown(conteudo, "EDA_SUMMARY.md")
 
 
 # ------------------------------------------------------------------------------
 # 6. Execução Principal
 # ------------------------------------------------------------------------------
 def main():
-    print("=" * 80)
-    print("INÍCIO DO SCRIPT 01: EDA E DECOMPOSIÇÃO TEMPORAL")
-    print("=" * 80)
+    iniciar_script("01", "EDA E DECOMPOSIÇÃO TEMPORAL")
 
     # 1. Carregar Dados
     df_w, df_d = carregar_dados()
@@ -822,10 +790,7 @@ def main():
     # 6. Exportar Resumo Markdown para o Relatório
     exportar_resumo_eda(metricas, df_outliers)
 
-    print("=" * 80)
-    print("[OK] SCRIPT 01 CONCLUÍDO COM SUCESSO!")
-    print(f"    Ficheiros gerados em: {OUTPUT_DIR.resolve()}")
-    print("=" * 80)
+    finalizar_script("01")
 
 
 if __name__ == "__main__":

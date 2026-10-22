@@ -38,9 +38,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from numpy.typing import ArrayLike
 from scipy import stats
-from sklearn.metrics import mean_absolute_error, mean_squared_error
 from statsmodels.graphics.gofplots import qqplot
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.stats.diagnostic import acorr_ljungbox
@@ -48,13 +46,18 @@ from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from statsmodels.tsa.statespace.sarimax import SARIMAX, SARIMAXResultsWrapper
 from statsmodels.tsa.stattools import adfuller
 from utils import (
-    DATASET_DIR,
-    OUTPUT_DIR,
     PNG_DIR,
     RC_PARAMS,
     SVG_DIR,
     TABLES_DIR,
+    calcular_metricas,
+    carregar_serie_temporal,
+    dividir_treino_teste,
+    finalizar_script,
     guardar_figura,
+    guardar_markdown,
+    guardar_tabela,
+    iniciar_script,
 )
 
 warnings.filterwarnings("ignore")
@@ -70,27 +73,6 @@ TABLES_DIR.mkdir(parents=True, exist_ok=True)
 plt.rcParams.update(RC_PARAMS)
 
 
-def calcular_metricas(y_true: ArrayLike, y_pred: ArrayLike) -> dict[str, float]:
-    """Calcula as quatro métricas obrigatórias da disciplina (Slide 13):
-
-    REQM (RMSE), EAM (MAE), EPAM (MAPE) e EPAMs (sMAPE).
-    """
-    y_true_arr = np.asarray(y_true, dtype=float)
-    y_pred_arr = np.asarray(y_pred, dtype=float)
-
-    reqm = np.sqrt(mean_squared_error(y_true_arr, y_pred_arr))
-    eam = mean_absolute_error(y_true_arr, y_pred_arr)
-    epam = np.mean(np.abs((y_true_arr - y_pred_arr) / y_true_arr)) * 100
-    epams = np.mean(200.0 * np.abs(y_pred_arr - y_true_arr) / (np.abs(y_true_arr) + np.abs(y_pred_arr)))
-
-    return {
-        "REQM": round(float(reqm), 2),
-        "EAM": round(float(eam), 2),
-        "EPAM": round(float(epam), 2),
-        "EPAMs": round(float(epams), 2),
-    }
-
-
 # ------------------------------------------------------------------------------
 # 2. Ingestão de Dados e Divisão Cronológica (80:20)
 # ------------------------------------------------------------------------------
@@ -101,17 +83,7 @@ def carregar_dados_e_dividir() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
     """
     print("[*] A carregar série semanal e a aplicar divisão treino/teste (80:20)...")
 
-    caminho_semanal = DATASET_DIR / "kernel_weekly_ts.csv"
-    if not caminho_semanal.exists():
-        raise FileNotFoundError(f"Ficheiro não encontrado: {caminho_semanal}")
-
-    # Truncatura da cauda (última observação incompleta) e frequência semanal
-    df = pd.read_csv(
-        caminho_semanal,
-        parse_dates=["committer_date"],
-        index_col="committer_date",
-    ).iloc[:-1]
-    df.index.freq = "W-MON"
+    df = carregar_serie_temporal("kernel_weekly_ts.csv", "W-MON")
 
     # Transformação de code churn em escala logarítmica para estabilização de variância (Slide 47)
     df["log_churn"] = np.log1p(df["total_churn"])
@@ -124,21 +96,7 @@ def carregar_dados_e_dividir() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
     df["cos_52_2"] = np.cos(2 * np.pi * 2 * t / 52.0)
 
     # Divisão estritamente cronológica 80:20 (class-code/1.py)
-    n_total = len(df)
-    n_treino = int(0.80 * n_total)
-
-    train = df.iloc[:n_treino].copy()
-    test = df.iloc[n_treino:].copy()
-
-    print(
-        f"    -> Amostra total: {n_total} semanas ({df.index.min().strftime('%Y-%m-%d')} a {df.index.max().strftime('%Y-%m-%d')})"
-    )
-    print(
-        f"    -> Amostra de treino (80%): {len(train)} semanas ({train.index.min().strftime('%Y-%m-%d')} a {train.index.max().strftime('%Y-%m-%d')})"
-    )
-    print(
-        f"    -> Amostra de teste  (20%): {len(test)} semanas ({test.index.min().strftime('%Y-%m-%d')} a {test.index.max().strftime('%Y-%m-%d')})"
-    )
+    train, test = dividir_treino_teste(df, "semanas")
 
     return df, train, test
 
@@ -211,9 +169,7 @@ def executar_testes_adf(train: pd.DataFrame) -> pd.DataFrame:
         })
 
     df_adf = pd.DataFrame(registos_adf)
-    caminho_csv = TABLES_DIR / "tab_03_adf.csv"
-    df_adf.to_csv(caminho_csv, index=False)
-    print(f"    -> Tabela ADF gravada com sucesso em: {caminho_csv}")
+    guardar_tabela(df_adf, "tab_03_adf", "Tabela ADF")
 
     return df_adf
 
@@ -512,9 +468,7 @@ def executar_diagnostico_residuos(
         })
 
     df_params = pd.DataFrame(linhas_tabela)
-    caminho_tab4 = TABLES_DIR / "tab_04_sarimax_results.csv"
-    df_params.to_csv(caminho_tab4, index=False)
-    print(f"    -> Tabela de coeficientes gravada em: {caminho_tab4}")
+    guardar_tabela(df_params, "tab_04_sarimax_results", "Tabela de coeficientes")
 
     # 2. Testes Formais nos Resíduos: Ljung-Box (Slide 55) e Jarque-Bera
     resid = res.resid
@@ -670,9 +624,7 @@ def consolidar_comparacao_econometrica(
         })
 
     df_comp = pd.DataFrame(registos_tabela).sort_values(by="REQM", ascending=True)
-    caminho_tab5 = TABLES_DIR / "tab_05_comparacao_econometrica.csv"
-    df_comp.to_csv(caminho_tab5, index=False)
-    print(f"    -> Tabela gravada com sucesso em: {caminho_tab5}")
+    guardar_tabela(df_comp, "tab_05_comparacao_econometrica")
 
     # 3. Sobreposição Gráfica no Período de Teste (fig_05_comparacao_econometrica.[png|svg])
     fig, ax = plt.subplots(figsize=(14, 7))
@@ -804,9 +756,7 @@ def projetar_futuro_holt_winters(
         "Semana": extended_index.isocalendar().week,
         "Previsao_Commits": np.round(pred_futura.values, 1),
     })
-    caminho_tab5b = TABLES_DIR / "tab_05b_previsao_futura_holtwinters.csv"
-    df_futuro.to_csv(caminho_tab5b, index=False)
-    print(f"    -> Tabela de previsões futuras gravada em: {caminho_tab5b}")
+    guardar_tabela(df_futuro, "tab_05b_previsao_futura_holtwinters", "Tabela de previsões futuras")
 
     # Gráfico de extensão histórica + projeção futura (class-code/2.py)
     fig, ax = plt.subplots(figsize=(14, 7))
@@ -879,8 +829,6 @@ def exportar_resumo_econometria(
     para que o Elemento A possa redigir o Capítulo 4 do Relatório.
     """
     print("[*] A exportar síntese econométrica em Markdown (output/ECONOMETRICS_SUMMARY.md)...")
-
-    caminho_md = OUTPUT_DIR / "ECONOMETRICS_SUMMARY.md"
 
     melhor_modelo_row = df_comp.iloc[0]
     holt_row = df_comp[df_comp["Modelo"].str.contains("Holt-Winters Multiplicativo", regex=False)].iloc[0]
@@ -963,20 +911,14 @@ def exportar_resumo_econometria(
 4. **`fig_05b_previsao_futura_holtwinters.[png|svg]`:** Inserir no Capítulo 4.3 / 7 (Projeção futura a 52 semanas com o modelo Holt-Winters reajustado à série completa).
 """
 
-    with open(caminho_md, "w", encoding="utf-8") as f:
-        f.write(conteudo)
-
-    print(f"    -> Resumo gravado em: {caminho_md}")
-    return caminho_md
+    return guardar_markdown(conteudo, "ECONOMETRICS_SUMMARY.md")
 
 
 # ------------------------------------------------------------------------------
 # 10. Execução Principal
 # ------------------------------------------------------------------------------
 def main():
-    print("=" * 80)
-    print("INÍCIO DO SCRIPT 02: MODELAÇÃO ECONOMÉTRICA CLÁSSICA")
-    print("=" * 80)
+    iniciar_script("02", "MODELAÇÃO ECONOMÉTRICA CLÁSSICA")
 
     # 1. Carregar Dados e Divisão Cronológica (80:20)
     df, train, test = carregar_dados_e_dividir()
@@ -1005,10 +947,7 @@ def main():
     # 9. Exportação da Síntese Markdown para o Relatório
     exportar_resumo_econometria(df_adf, df_comp, df_params, lb_teste, jb_pval)
 
-    print("=" * 80)
-    print("[OK] SCRIPT 02 CONCLUÍDO COM SUCESSO!")
-    print(f"    Ficheiros gerados em: {OUTPUT_DIR.resolve()}")
-    print("=" * 80)
+    finalizar_script("02")
 
 
 if __name__ == "__main__":

@@ -29,12 +29,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from utils import (
-    OUTPUT_DIR,
     PNG_DIR,
     RC_PARAMS,
     SVG_DIR,
     TABLES_DIR,
+    finalizar_script,
     guardar_figura,
+    guardar_tabela,
+    iniciar_script,
 )
 
 # ------------------------------------------------------------------------------
@@ -89,9 +91,7 @@ def consolidar_benchmark() -> pd.DataFrame:
         })
 
     df_master = pd.DataFrame(registos).sort_values(by="REQM (RMSE)", ascending=True)
-    caminho_tab = TABLES_DIR / "tab_08_master_benchmark_metricas.csv"
-    df_master.to_csv(caminho_tab, index=False)
-    print(f"    -> Tabela Mestre gravada com sucesso em: {caminho_tab}")
+    guardar_tabela(df_master, "tab_08_master_benchmark_metricas", "Tabela Mestre")
 
     return df_master
 
@@ -170,9 +170,7 @@ def gerar_figura_master(df_master: pd.DataFrame) -> tuple[Path, Path]:
 # 4. Execução Principal
 # ------------------------------------------------------------------------------
 def main():
-    print("=" * 80)
-    print("INÍCIO DO SCRIPT 04: CONSOLIDAÇÃO DO BENCHMARK COMPARATIVO")
-    print("=" * 80)
+    iniciar_script("04", "CONSOLIDAÇÃO DO BENCHMARK COMPARATIVO")
 
     # 1. Consolidar Tabela Mestre
     df_master = consolidar_benchmark()
@@ -184,10 +182,7 @@ def main():
     print("\n[*] Resumo da Tabela Mestre:")
     print(df_master.to_string(index=False))
 
-    print("=" * 80)
-    print("[OK] SCRIPT 04 CONCLUÍDO COM SUCESSO!")
-    print(f"    Ficheiros gerados em: {OUTPUT_DIR.resolve()}")
-    print("=" * 80)
+    finalizar_script("04")
 
 
 if __name__ == "__main__":

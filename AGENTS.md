@@ -10,11 +10,11 @@
 ## 2. Critical Operational Gotchas
 
 ### ⚠️ GitHub 100 MB Limit (`kernel_raw_commits.csv`)
-* `Dataset/Extractor/kernel_raw_commits.csv` is **~175 MB**. It is git-ignored and **must never be committed to Git**.
-* The resampled series `Dataset/kernel_daily_ts.csv` (~366 KB) and `Dataset/kernel_weekly_ts.csv` (~63 KB) are tracked in Git.
+* `dataset/Extractor/kernel_raw_commits.csv` is **~175 MB**. It is git-ignored and **must never be committed to Git**.
+* The resampled series `dataset/kernel_daily_ts.csv` (~366 KB) and `dataset/kernel_weekly_ts.csv` (~63 KB) are tracked in Git.
 * If accidentally staged, unstage immediately:
   ```bash
-  git restore --staged Dataset/Extractor/kernel_raw_commits.csv
+  git restore --staged dataset/Extractor/kernel_raw_commits.csv
   ```
 
 ### ⚠️ Boundary Anomalies (Tail & Head Cleaning)
@@ -30,11 +30,11 @@
 import pandas as pd
 
 # Weekly
-df_w = pd.read_csv("Dataset/kernel_weekly_ts.csv", parse_dates=["committer_date"], index_col="committer_date").iloc[:-1]
+df_w = pd.read_csv("dataset/kernel_weekly_ts.csv", parse_dates=["committer_date"], index_col="committer_date").iloc[:-1]
 df_w.index.freq = "W-MON"
 
 # Daily
-df_d = pd.read_csv("Dataset/kernel_daily_ts.csv", parse_dates=["committer_date"], index_col="committer_date").iloc[:-1]
+df_d = pd.read_csv("dataset/kernel_daily_ts.csv", parse_dates=["committer_date"], index_col="committer_date").iloc[:-1]
 df_d.index.freq = "D"
 ```
 
@@ -64,29 +64,29 @@ Run all Python workflows with [`uv`](https://github.com/astral-sh/uv). No persis
   uv run --with "torch,pandas,numpy,matplotlib,scikit-learn" python <script_path.py>
   ```
 
-### Extractor Pipeline (`Dataset/Extractor/extractor.py`)
+### Extractor Pipeline (`dataset/Extractor/extractor.py`)
 * The pre-extracted dataset is already available; **do not clone the ~50 GB Linux Git repo** for modeling tasks.
 * Fast resample regeneration from existing `kernel_raw_commits.csv` (~15s):
   ```bash
-  uv run Dataset/Extractor/extractor.py
+  uv run dataset/Extractor/extractor.py
   ```
 * Full Git extraction (only needed when regenerating from a local bare clone):
   ```bash
-  uv run Dataset/Extractor/extractor.py /path/to/linux-bare.git --force-extract --workers 8
+  uv run dataset/Extractor/extractor.py /path/to/linux-bare.git --force-extract --workers 8
   ```
 
 ---
 
-## 4. Dataset Schemas & Modeling Conventions
+## 4. dataset Schemas & Modeling Conventions
 
 ### Files & Granularity
-* **`Dataset/kernel_weekly_ts.csv`** (`W-MON`, 1,117 clean observations): Mondays. Primary series for classical econometrics:
+* **`dataset/kernel_weekly_ts.csv`** (`W-MON`, 1,117 clean observations): Mondays. Primary series for classical econometrics:
   * Decomposition (Additive & Multiplicative, trend vs holiday/summer seasonality)
   * Holt-Winters Exponential Smoothing ($s=52$)
   * ARIMA / SARIMA
   * ARIMAX / SARIMAX with exogenous covariates
-* **`Dataset/kernel_daily_ts.csv`** (`D`, 7,815 clean observations): Daily series with day-of-week micro-seasonality ($s=7$). Primary series for Deep Learning sliding-window sequence models (1D-CNN, RNN, LSTM, GRU).
-* **`Dataset/Extractor/kernel_raw_commits.csv`**: Raw event log (~1.39M rows, git-ignored).
+* **`dataset/kernel_daily_ts.csv`** (`D`, 7,815 clean observations): Daily series with day-of-week micro-seasonality ($s=7$). Primary series for Deep Learning sliding-window sequence models (1D-CNN, RNN, LSTM, GRU).
+* **`dataset/Extractor/kernel_raw_commits.csv`**: Raw event log (~1.39M rows, git-ignored).
 
 ### Variables & Roles
 * **Targets ($Y_t$):** `total_commits` (gross activity) or `non_merge_commits` (direct engineering work, excluding merge commits).

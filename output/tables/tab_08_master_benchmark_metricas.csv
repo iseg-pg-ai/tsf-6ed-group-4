@@ -1,12 +1,12 @@
 Modelo,Família,Regime,REQM (RMSE),EAM (MAE),EPAM (MAPE),EPAMs (sMAPE)
-LSTM Multivariado,Deep Learning,Multivariado (F=6),129.94,78.92,61.15,36.97
-1D-CNN Multivariado,Deep Learning,Multivariado (F=6),130.88,76.96,56.09,35.78
-GRU Multivariado,Deep Learning,Multivariado (F=6),132.12,78.99,53.91,37.59
-SimpleRNN Multivariado,Deep Learning,Multivariado (F=6),136.14,86.14,67.0,44.34
-SimpleRNN Univariado,Deep Learning,Univariado (F=1),142.24,91.76,73.41,43.7
-1D-CNN Univariado,Deep Learning,Univariado (F=1),144.24,84.45,65.04,38.92
-GRU Univariado,Deep Learning,Univariado (F=1),152.87,103.18,99.66,48.77
-LSTM Univariado,Deep Learning,Univariado (F=1),164.9,118.9,133.67,55.43
+LSTM Multivariado,Deep Learning,Multivariado (F=6),129.98,78.31,58.93,36.78
+1D-CNN Multivariado,Deep Learning,Multivariado (F=6),131.54,77.33,55.22,36.02
+GRU Multivariado,Deep Learning,Multivariado (F=6),132.68,79.54,55.1,37.94
+SimpleRNN Multivariado,Deep Learning,Multivariado (F=6),136.37,86.23,67.05,44.16
+SimpleRNN Univariado,Deep Learning,Univariado (F=1),141.5,91.36,73.76,44.04
+GRU Univariado,Deep Learning,Univariado (F=1),141.8,90.41,76.67,44.88
+1D-CNN Univariado,Deep Learning,Univariado (F=1),152.13,86.68,62.66,40.69
+LSTM Univariado,Deep Learning,Univariado (F=1),164.91,118.39,131.1,55.24
 "ARIMAX(0, 1, 2) + Covariáveis",Econometria Clássica,ARIMAX Multivariado,263.24,171.04,10.76,11.11
 "ARIMAX(1, 1, 1) + Covariáveis",Econometria Clássica,ARIMAX Multivariado,263.39,171.14,10.76,11.1
 "SARIMAX(0, 1, 2) + Covariáveis + Fourier",Econometria Clássica,ARIMAX Multivariado,263.51,172.3,10.79,11.1

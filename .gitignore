@@ -25,8 +25,8 @@ htmlcov/
 # Project-Specific: Heavy Raw Data & Extraction Artifacts
 # Note: kernel_raw_commits.csv exceeds GitHub's 100 MB file limit (~183 MB).
 # Resampled time series (kernel_daily_ts.csv and kernel_weekly_ts.csv) are tracked.
-Dataset/Extractor/kernel_raw_commits.csv
-Dataset/Extractor/_kernel_ts_chunks/
+dataset/Extractor/kernel_raw_commits.csv
+dataset/Extractor/_kernel_ts_chunks/
 _kernel_ts_chunks/
 
 
