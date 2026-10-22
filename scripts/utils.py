@@ -4,6 +4,7 @@ Este módulo centraliza funções e caminhos comuns aos scripts em ``scripts/``.
 """
 
 from pathlib import Path
+from typing import cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -75,15 +76,15 @@ def carregar_serie_temporal(nome_ficheiro: str, frequencia: str) -> pd.DataFrame
 
 def resumo_serie(df: pd.DataFrame, rotulo: str, unidade: str) -> None:
     """Imprime o número de observações e o intervalo temporal de uma série."""
+    inicio = cast(pd.Timestamp, df.index.min())
+    fim = cast(pd.Timestamp, df.index.max())
     print(
         f"    -> {rotulo}: {len(df)} {unidade} "
-        f"({df.index.min().strftime('%Y-%m-%d')} a {df.index.max().strftime('%Y-%m-%d')})"
+        f"({inicio:%Y-%m-%d} a {fim:%Y-%m-%d})"
     )
 
 
-def dividir_treino_teste(
-    df: pd.DataFrame, unidade: str, proporcao: float = 0.80
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+def dividir_treino_teste(df: pd.DataFrame, unidade: str, proporcao: float = 0.80) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Divide a série cronologicamente em treino/teste e imprime o resumo dos períodos."""
     n_treino = int(proporcao * len(df))
     train = df.iloc[:n_treino].copy()
