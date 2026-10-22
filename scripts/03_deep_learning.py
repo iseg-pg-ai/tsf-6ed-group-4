@@ -30,6 +30,7 @@ Conformidade com os Slides da Aula #5 (Slides 79 a 111):
 ================================================================================
 """
 
+import json
 import warnings
 from pathlib import Path
 
@@ -60,23 +61,11 @@ PNG_DIR.mkdir(parents=True, exist_ok=True)
 SVG_DIR.mkdir(parents=True, exist_ok=True)
 TABLES_DIR.mkdir(parents=True, exist_ok=True)
 
-# Configuração visual académica
-plt.rcParams.update({
-    "font.family": "serif",
-    "font.size": 10,
-    "axes.titlesize": 11,
-    "axes.labelsize": 10,
-    "xtick.labelsize": 9,
-    "ytick.labelsize": 9,
-    "legend.fontsize": 9,
-    "figure.titlesize": 13,
-    "figure.dpi": 300,
-    "savefig.dpi": 300,
-    "savefig.bbox": "tight",
-    "axes.grid": True,
-    "grid.alpha": 0.5,
-    "grid.linestyle": "--",
-})
+# Configuração visual académica (carregada de config.json)
+CONFIG_PATH = ROOT_DIR / "config.json"
+with CONFIG_PATH.open(encoding="utf-8") as _config_file:
+    CONFIG = json.load(_config_file)
+plt.rcParams.update(CONFIG["matplotlib"]["rcParams"])
 
 # Configuração de dispositivo (CPU devido a incompatibilidade de Compute Capability da MX150)
 device = torch.device("cpu")

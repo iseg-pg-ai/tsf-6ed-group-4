@@ -1,0 +1,20 @@
+{
+  "matplotlib": {
+    "rcParams": {
+      "font.family": "serif",
+      "font.size": 10,
+      "axes.titlesize": 11,
+      "axes.labelsize": 10,
+      "xtick.labelsize": 9,
+      "ytick.labelsize": 9,
+      "legend.fontsize": 9,
+      "figure.titlesize": 13,
+      "figure.dpi": 300,
+      "savefig.dpi": 300,
+      "savefig.bbox": "tight",
+      "axes.grid": true,
+      "grid.alpha": 0.5,
+      "grid.linestyle": "--"
+    }
+  }
+}

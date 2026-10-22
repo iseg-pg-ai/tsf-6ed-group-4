@@ -48,10 +48,16 @@ If you want to re-generate the daily and weekly CSVs from the local commit cache
 * **Linux / macOS:**
   ```bash
   uv run scripts/01_eda_decomposition.py
+  uv run scripts/02_classical_econometrics.py
+  uv run scripts/03_deep_learning.py
+  uv run scripts/04_benchmark_consolidado.py
   ```
 * **Windows (PowerShell / Command Prompt):**
   ```powershell
   uv run scripts\01_eda_decomposition.py
+  uv run scripts\02_classical_econometrics.py
+  uv run scripts\03_deep_learning.py
+  uv run scripts\04_benchmark_consolidado.py
   ```
 
 ---
@@ -68,11 +74,13 @@ source .venv/bin/activate
 
 # 2. Install dependencies
 pip install --upgrade pip
-pip install pandas numpy statsmodels scipy matplotlib seaborn scikit-learn pmdarima
+pip install pandas numpy statsmodels scipy matplotlib seaborn scikit-learn pmdarima torch
 
 # 3. Run analysis scripts
 python scripts/01_eda_decomposition.py
 python scripts/02_classical_econometrics.py
+python scripts/03_deep_learning.py
+python scripts/04_benchmark_consolidado.py
 
 ```
 
@@ -90,10 +98,13 @@ python -m venv .venv
 
 # 2. Install dependencies
 python -m pip install --upgrade pip
-pip install pandas numpy statsmodels scipy matplotlib seaborn scikit-learn pmdarima
+pip install pandas numpy statsmodels scipy matplotlib seaborn scikit-learn pmdarima torch
 
 # 3. Run analysis scripts
 python scripts\01_eda_decomposition.py
+python scripts/02_classical_econometrics.py
+python scripts/03_deep_learning.py
+python scripts/04_benchmark_consolidado.py
 ```
 
 ---
