@@ -31,20 +31,22 @@ Conformidade com os Slides das Aulas #1 a #4:
 
 import warnings
 from pathlib import Path
+from typing import cast
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from matplotlib.figure import Figure
+from numpy.typing import ArrayLike
 from scipy import stats
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from statsmodels.graphics.gofplots import qqplot
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.stats.diagnostic import acorr_ljungbox
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
-from statsmodels.tsa.seasonal import seasonal_decompose
-from statsmodels.tsa.statespace.sarimax import SARIMAX
+from statsmodels.tsa.statespace.sarimax import SARIMAX, SARIMAXResultsWrapper
 from statsmodels.tsa.stattools import adfuller
 
 warnings.filterwarnings("ignore")
@@ -83,7 +85,7 @@ plt.rcParams.update({
 })
 
 
-def guardar_figura(fig: plt.Figure, nome_base: str) -> tuple[Path, Path]:
+def guardar_figura(fig: Figure, nome_base: str) -> tuple[Path, Path]:
     """Guarda a figura simultaneamente em PNG (alta resolução, 300 DPI) e SVG (vetorial)."""
     caminho_png = PNG_DIR / f"{nome_base}.png"
     caminho_svg = SVG_DIR / f"{nome_base}.svg"
@@ -94,18 +96,18 @@ def guardar_figura(fig: plt.Figure, nome_base: str) -> tuple[Path, Path]:
     return caminho_png, caminho_svg
 
 
-def calcular_metricas(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
+def calcular_metricas(y_true: ArrayLike, y_pred: ArrayLike) -> dict[str, float]:
     """Calcula as quatro métricas obrigatórias da disciplina (Slide 13):
 
     REQM (RMSE), EAM (MAE), EPAM (MAPE) e EPAMs (sMAPE).
     """
-    y_true = np.asarray(y_true, dtype=float)
-    y_pred = np.asarray(y_pred, dtype=float)
+    y_true_arr = np.asarray(y_true, dtype=float)
+    y_pred_arr = np.asarray(y_pred, dtype=float)
 
-    reqm = np.sqrt(mean_squared_error(y_true, y_pred))
-    eam = mean_absolute_error(y_true, y_pred)
-    epam = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
-    epams = np.mean(200.0 * np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred)))
+    reqm = np.sqrt(mean_squared_error(y_true_arr, y_pred_arr))
+    eam = mean_absolute_error(y_true_arr, y_pred_arr)
+    epam = np.mean(np.abs((y_true_arr - y_pred_arr) / y_true_arr)) * 100
+    epams = np.mean(200.0 * np.abs(y_pred_arr - y_true_arr) / (np.abs(y_true_arr) + np.abs(y_pred_arr)))
 
     return {
         "REQM": round(float(reqm), 2),
@@ -208,7 +210,10 @@ def executar_testes_adf(train: pd.DataFrame) -> pd.DataFrame:
 
     for nome, tipo_dif, serie in series_para_teste:
         s_clean = serie.dropna()
-        res = adfuller(s_clean, autolag="AIC")
+        res = cast(
+            tuple[float, float, int, int, dict[str, float], float],
+            adfuller(s_clean, autolag="AIC"),
+        )
 
         estat_adf = res[0]
         p_valor = res[1]
@@ -319,7 +324,7 @@ def criar_correlogramas_fac_facp(train: pd.DataFrame) -> tuple[Path, Path]:
 # ------------------------------------------------------------------------------
 # 5. Modelação de Alisamento Exponencial (Holt e Holt-Winters) — Aulas #1
 # ------------------------------------------------------------------------------
-def modelar_alisamento_exponencial(train: pd.DataFrame, test: pd.DataFrame) -> tuple[dict, dict]:
+def modelar_alisamento_exponencial(train: pd.DataFrame, test: pd.DataFrame) -> dict:
     """Estima os modelos de alisamento exponencial (Holt Linear, Holt-Winters Aditivo e Multiplicativo).
 
     Implementa a parametrização demonstrada em class-code/1.py e nos Slides 11 a 30.
@@ -391,7 +396,9 @@ def modelar_alisamento_exponencial(train: pd.DataFrame, test: pd.DataFrame) -> t
 # ------------------------------------------------------------------------------
 # 6. Modelação ARIMA e ARIMAX com Covariáveis Exógenas — Aulas #2, #3 e #4
 # ------------------------------------------------------------------------------
-def modelar_arima_arimax(train: pd.DataFrame, test: pd.DataFrame) -> tuple[dict, object]:
+def modelar_arima_arimax(
+    train: pd.DataFrame, test: pd.DataFrame
+) -> tuple[dict, tuple[str, SARIMAXResultsWrapper, list[str] | None]]:
     """Estima especificações univariadas (ARIMA) e multivariadas (ARIMAX).
 
     Adiciona covariáveis exógenas (contribuidores e code churn) e termos harmónicos de Fourier.
@@ -468,7 +475,7 @@ def modelar_arima_arimax(train: pd.DataFrame, test: pd.DataFrame) -> tuple[dict,
             enforce_stationarity=False,
             enforce_invertibility=False,
         )
-        res = mod.fit(disp=False, maxiter=100)
+        res = cast(SARIMAXResultsWrapper, mod.fit(disp=False, maxiter=100))
 
         pred = res.forecast(steps=n_passos, exog=X_te)
         pred.index = y_test.index
@@ -493,6 +500,7 @@ def modelar_arima_arimax(train: pd.DataFrame, test: pd.DataFrame) -> tuple[dict,
             menor_reqm = metricas["REQM"]
             modelo_vencedor = (rotulo, res, var_names)
 
+    assert modelo_vencedor is not None
     return modelos_bj, modelo_vencedor
 
 
@@ -500,13 +508,13 @@ def modelar_arima_arimax(train: pd.DataFrame, test: pd.DataFrame) -> tuple[dict,
 # 7. Diagnóstico dos Resíduos e Tabela Formal SARIMAX — Slides 55, 56, 70
 # ------------------------------------------------------------------------------
 def executar_diagnostico_residuos(
-    modelo_vencedor_info: tuple,
-) -> tuple[pd.DataFrame, tuple[Path, Path]]:
+    modelo_vencedor_info: tuple[str, SARIMAXResultsWrapper, list[str] | None],
+) -> tuple[pd.DataFrame, tuple[Path, Path], pd.DataFrame, float]:
     """Gera a tabela formal de estimação (tab_04_sarimax_results.csv) e o painel quádruplo
 
     de diagnóstico de resíduos para validação de ruído branco (Ljung-Box e Jarque-Bera).
     """
-    rotulo, res, var_names = modelo_vencedor_info
+    rotulo, res, _var_names = modelo_vencedor_info
     print(f"[*] A executar diagnóstico de resíduos para o modelo eleito: {rotulo}...")
 
     # 1. Extração da Tabela Formal de Parâmetros (Slide 56 e 70)
@@ -539,11 +547,11 @@ def executar_diagnostico_residuos(
     std_resid = (resid - resid.mean()) / resid.std()
 
     lb_teste = acorr_ljungbox(resid, lags=[1, 5, 10, 15, 20], return_df=True)
-    jb_stat, jb_pval = stats.jarque_bera(resid)
+    jb_stat, jb_pval = cast(tuple[float, float], stats.jarque_bera(resid))
 
     print("\n    [Diagnóstico de Resíduos]")
     print(f"    -> Teste de Jarque-Bera: Estatística = {jb_stat:.2f}, p-value = {jb_pval:.4e}")
-    print(f"    -> Teste de Ljung-Box (Lags 1 a 20):")
+    print("    -> Teste de Ljung-Box (Lags 1 a 20):")
     for lag_idx, row in lb_teste.iterrows():
         p_q = row["lb_pvalue"]
         status = "Ruído Branco (p > 0.05)" if p_q > 0.05 else "Autocorrelação Residual"
@@ -754,9 +762,9 @@ def consolidar_comparacao_econometrica(
             )
 
     # Linha divisória vertical de treino/teste
-    data_corte = test.index[0]
+    data_corte = cast(pd.Timestamp, test.index[0])
     ax.axvline(
-        data_corte,
+        float(mdates.date2num(data_corte)),
         color="darkblue",
         linestyle="--",
         lw=1.2,
@@ -818,7 +826,7 @@ def projetar_futuro_holt_winters(
 
     df_futuro = pd.DataFrame({
         "Data": extended_index.strftime("%Y-%m-%d"),
-        "Ano": extended_index.year,
+        "Ano": [d.year for d in extended_index],
         "Semana": extended_index.isocalendar().week,
         "Previsao_Commits": np.round(pred_futura.values, 1),
     })
@@ -856,12 +864,13 @@ def projetar_futuro_holt_winters(
         label=rf"Previsão Futura ($h=52$ semanas, $\alpha={alpha_opt:.3f}, \beta={beta_opt:.3f}, \gamma={gamma_opt:.3f}$)",
     )
 
+    last_date = cast(pd.Timestamp, df.index[-1])
     ax.axvline(
-        df.index[-1],
+        float(mdates.date2num(last_date)),
         color="black",
         linestyle=":",
         lw=1.2,
-        label=f"Fim do Histórico Observado ({df.index[-1].strftime('%Y-%m-%d')})",
+        label=f"Fim do Histórico Observado ({last_date.strftime('%Y-%m-%d')})",
     )
 
     ax.set_title(

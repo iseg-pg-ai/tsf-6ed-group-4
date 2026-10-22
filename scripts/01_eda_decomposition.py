@@ -30,9 +30,9 @@ from pathlib import Path
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import seaborn as sns
+from matplotlib.figure import Figure
 from scipy import stats
 from statsmodels.tsa.seasonal import seasonal_decompose
 
@@ -70,14 +70,14 @@ plt.rcParams.update({
 })
 
 
-def guardar_figura(fig: plt.Figure, nome_base: str) -> tuple[Path, Path]:
+def guardar_figura(fig: Figure, nome_base: str) -> tuple[Path, Path]:
     """Guarda a figura simultaneamente em PNG (alta resolução, 300 DPI) e SVG (vetorial)."""
     caminho_png = PNG_DIR / f"{nome_base}.png"
     caminho_svg = SVG_DIR / f"{nome_base}.svg"
     fig.savefig(caminho_png)
     fig.savefig(caminho_svg)
     plt.close(fig)
-    print(f"    -> Gráficos gravados:")
+    print("    -> Gráficos gravados:")
     print(f"       [PNG] {caminho_png}")
     print(f"       [SVG] {caminho_svg}")
     return caminho_png, caminho_svg
@@ -166,13 +166,15 @@ def gerar_matriz_correlacao(df_w: pd.DataFrame) -> tuple[pd.DataFrame, Path]:
     ]
 
     # 1. Cálculos de correlação
-    corr_pearson_all = df_w[colunas].corr(method="pearson")
+    df_cols = df_w[colunas]
+    assert isinstance(df_cols, pd.DataFrame)
+    corr_pearson_all = df_cols.corr(method="pearson")
     # Excluir a 1ª semana (import inicial de 6.75M linhas) para não distorcer linearmente o code churn
-    corr_pearson_clean = df_w.iloc[1:][colunas].corr(method="pearson")
+    corr_pearson_clean = df_cols.iloc[1:].corr(method="pearson")
     # Correlação em primeiras diferenças (d=1, sem o ponto inicial)
-    corr_diff_clean = df_w.iloc[1:][colunas].diff().dropna().corr(method="pearson")
+    corr_diff_clean = df_cols.iloc[1:].diff().dropna().corr(method="pearson")
     # Correlação de postos de Spearman (amostra total)
-    corr_spearman = df_w[colunas].corr(method="spearman")
+    corr_spearman = df_cols.corr(method="spearman")
 
     # Diagnóstico de colinearidade e adequação como variável exógena
     diagnosticos = {
@@ -478,7 +480,7 @@ def criar_cronogramas(df_w: pd.DataFrame, df_d: pd.DataFrame) -> Path:
     ax4.set_ylabel("Commits diários")
     ax4.set_xlabel("Data")
     ax4.legend(loc="upper right")
-    ax4.xaxis.set_major_locator(mdates.WeekdayLocator(byweekday=mdates.MO))
+    ax4.xaxis.set_major_locator(mdates.WeekdayLocator(byweekday=mdates.MO.weekday))
     ax4.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
 
     plt.tight_layout()

@@ -28,7 +28,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
+from matplotlib.figure import Figure
 
 # ------------------------------------------------------------------------------
 # 1. Configuração de Caminhos e Ambiente
@@ -63,7 +63,7 @@ plt.rcParams.update({
 })
 
 
-def guardar_figura(fig: plt.Figure, nome_base: str) -> tuple[Path, Path]:
+def guardar_figura(fig: Figure, nome_base: str) -> tuple[Path, Path]:
     """Guarda a figura simultaneamente em PNG (alta resolução, 300 DPI) e SVG (vetorial)."""
     caminho_png = PNG_DIR / f"{nome_base}.png"
     caminho_svg = SVG_DIR / f"{nome_base}.svg"

@@ -85,6 +85,7 @@ def verify_repo(path: Path) -> None:
         ["git", "-C", str(path), "rev-parse", "--is-bare-repository"],
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode != 0:
         print(
@@ -103,9 +104,9 @@ def get_all_commit_hashes(repo_path: Path) -> list[str]:
     print("[*] Enumerating commit graph via `git rev-list --all`...", flush=True)
     result = subprocess.run(
         ["git", "-C", str(repo_path), "rev-list", "--all"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
+        check=False,
         errors="replace",
     )
     if result.returncode != 0:
@@ -314,18 +315,14 @@ def build_time_series(raw_csv: Path, daily_csv: Path, weekly_csv: Path) -> None:
             "insertions": "sum",
             "deletions": "sum",
         }
-        ts_df = (
-            df
-            .resample(rule)
-            .agg(agg_spec)
-            .rename(
-                columns={
-                    "is_merge": "total_commits",
-                    "author_email": "unique_authors",
-                }
-            )
-            .fillna(0)
-        )
+        resampled = df.resample(rule).agg(agg_spec)
+        assert isinstance(resampled, pd.DataFrame)
+        ts_df = resampled.rename(
+            columns={
+                "is_merge": "total_commits",
+                "author_email": "unique_authors",
+            }
+        ).fillna(0)
 
         ts_df["total_churn"] = ts_df["insertions"] + ts_df["deletions"]
         ts_df["net_code_growth"] = ts_df["insertions"] - ts_df["deletions"]

@@ -37,11 +37,11 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import torch
-import torch.nn as nn
+from matplotlib.figure import Figure
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.preprocessing import MinMaxScaler
+from torch import nn
 
 warnings.filterwarnings("ignore")
 
@@ -83,7 +83,7 @@ device = torch.device("cpu")
 print(f"[*] Dispositivo de processamento: {device} (GPU incompatível com PyTorch 2.14+cu130)")
 
 
-def guardar_figura(fig: plt.Figure, nome_base: str) -> tuple[Path, Path]:
+def guardar_figura(fig: Figure, nome_base: str) -> tuple[Path, Path]:
     """Guarda a figura simultaneamente em PNG (alta resolução, 300 DPI) e SVG (vetorial)."""
     caminho_png = PNG_DIR / f"{nome_base}.png"
     caminho_svg = SVG_DIR / f"{nome_base}.svg"
@@ -196,7 +196,7 @@ class CNN1D(nn.Module):
     """
 
     def __init__(self, n_features: int, window_size: int):
-        super(CNN1D, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv1d(in_channels=n_features, out_channels=32, kernel_size=3, padding=1)
         self.relu1 = nn.ReLU()
         self.pool1 = nn.MaxPool1d(kernel_size=2)
@@ -227,7 +227,7 @@ class SimpleRNNModel(nn.Module):
     """
 
     def __init__(self, n_features: int, hidden_size: int = 50):
-        super(SimpleRNNModel, self).__init__()
+        super().__init__()
         self.rnn = nn.RNN(input_size=n_features, hidden_size=hidden_size, batch_first=True)
         self.fc = nn.Linear(hidden_size, 1)
 
@@ -244,7 +244,7 @@ class LSTMModel(nn.Module):
     """
 
     def __init__(self, n_features: int, hidden_size: int = 50):
-        super(LSTMModel, self).__init__()
+        super().__init__()
         self.lstm = nn.LSTM(input_size=n_features, hidden_size=hidden_size, batch_first=True)
         self.fc = nn.Linear(hidden_size, 1)
 
@@ -261,7 +261,7 @@ class GRUModel(nn.Module):
     """
 
     def __init__(self, n_features: int, hidden_size: int = 50):
-        super(GRUModel, self).__init__()
+        super().__init__()
         self.gru = nn.GRU(input_size=n_features, hidden_size=hidden_size, batch_first=True)
         self.fc = nn.Linear(hidden_size, 1)
 
@@ -369,7 +369,7 @@ def main():
     print("=" * 80)
 
     # 1. Carregar Dados e Divisão Cronológica
-    df, train, test, features_mult = carregar_dados_e_preparar()
+    _df, train, test, features_mult = carregar_dados_e_preparar()
 
     # 2. Normalização (fit no treino apenas — prevenção de data leakage)
     scaler_X = MinMaxScaler(feature_range=(0, 1))
@@ -736,7 +736,7 @@ def main():
 ## 1. Formulação por Janelas Deslizantes e Prevenção de Fuga de Informação (Slide 85)
 * **Série Utilizada:** Diária (`kernel_daily_ts.csv`, $N = 7.815$ observações, frequência `D`).
 * **Justificação da Escolha:** As redes neuronais treinadas por descida de gradiente (*backpropagation*) necessitam de milhares de pontos para convergir sem sobreajustar. A frequência diária contém micro-sazonalidade intra-semanal ($s = 7$, com quedas sistemáticas aos fins de semana), ideal para testar a capacidade das redes.
-* **Janela Deslizante ($W = 28$ dias):** Cada observação de treino é uma matriz $X \in \mathbb{{R}}^{{B \\times 28 \\times F}}$, onde $B$ é o tamanho do lote, $28$ são os dias de histórico (4 semanas completas) e $F$ é o número de características.
+* **Janela Deslizante ($W = 28$ dias):** Cada observação de treino é uma matriz $X \\in \\mathbb{{R}}^{{B \\times 28 \\times F}}$, onde $B$ é o tamanho do lote, $28$ são os dias de histórico (4 semanas completas) e $F$ é o número de características.
 * **Prevenção de Data Leakage:**
   * Divisão estritamente cronológica (80% treino, 20% teste).
   * `MinMaxScaler` ajustado **exclusivamente na amostra de treino** e aplicado à amostra de teste (sem contaminação).

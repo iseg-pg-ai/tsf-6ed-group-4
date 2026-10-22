@@ -2,6 +2,8 @@
     "editor.formatOnSave": true,
     // Disables the default language server so the standalone Pyright extension can take over
     "python.languageServer": "None",
+    "python.pythonPath": "${workspaceFolder}/.venv/bin/python",
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff",
         "editor.codeActionsOnSave": {
