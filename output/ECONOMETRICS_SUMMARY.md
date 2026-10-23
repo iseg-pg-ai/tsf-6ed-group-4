@@ -39,14 +39,20 @@
 ---
 
 ## 4. Modelação Box-Jenkins: Ganho Estrutural com Covariáveis Exógenas (Capítulo 4.4 — Slides 67 a 74)
+* **Amostra de estimação:** divisão cronológica 80:20 com 893 semanas de treino e 224 de teste (2022 a 2026). As 10 semanas anteriores ao primeiro *tag* de release não têm fase conhecida, pelo que todas as especificações Box-Jenkins são estimadas nas mesmas **883 semanas**. É isso que torna a comparação como-para-como: sem esta restrição, o modelo com a fase teria uma amostra diferente do modelo sem ela.
 * **Confronto Univariado vs. Multivariado:**
-  * **ARIMA(0, 1, 2) Univariado:** REQM = **614.75**, EPAM = **36.78%** (AIC = 13359.32).
-  * **ARIMAX(0, 1, 2) + Covariáveis:** REQM = **263.24**, EPAM = **10.76%** (AIC = 11589.33).
-  * **Ganho Percentual:** A introdução das covariáveis de engenharia reduziu o REQM em **57.2%** e o EPAM de **36.78%** para **10.76%**.
+  * **ARIMA(0, 1, 2) Univariado:** REQM = **614.76**, EPAM = **36.78%** (AIC = 13227.55).
+  * **ARIMAX(0, 1, 2) + Covariáveis + Fase de Release:** REQM = **254.0**, EPAM = **10.08%** (AIC = 11423.96).
+  * **Ganho Percentual:** A introdução das covariáveis exógenas reduziu o REQM em **58.7%** e o EPAM de **36.78%** para **10.08%**.
+* **Fase do ciclo de release (merge window como referência):**
+  * `fase_rc_inicial` (estabilização inicial, rc1-5): Coeficiente = **-83.4928** ($p$-value < 0.0001).
+  * `fase_rc_final` (estabilização final, rc6+): Coeficiente = **-18.8394** ($p$-value = 0.1893).
+  * **Contributo da variável:** o modelo com a fase reduz o REQM em 2.9% face à especificação sem ela (254.00 contra 261.59), na mesma amostra de treino.
+  * **Como ler:** estando o modelo em primeiras diferenças, cada coeficiente compara o **ritmo semanal** dessa fase com o da merge window, e não o nível de commits. São médias de 2005-2026 e o efeito inverte de sinal em 2015 (ver `tab_02_outliers.csv`), pelo que a média esconde a heterogeneidade entre eras. A fase é a única covariável conhecida antes de a semana começar; a justificação da escolha e a comparação com as alternativas estão em `scripts/analise_covariaveis_release/README.md`.
 * **Significância dos Coeficientes das Covariáveis (Slide 70):**
-  * `unique_authors` (Contribuidores): Coeficiente = **+4.6594** ($p$-value < 0.0001).
-  * `log_churn` (Code Churn): Coeficiente = **+97.6727** ($p$-value < 0.0001).
-  * **Como ler estes coeficientes:** o modelo está estimado em **primeiras diferenças** ($d = 1$), pelo que os coeficientes medem o efeito sobre a **variação semanal** da atividade, e não sobre o nível. Um contribuidor ativo adicional está associado a cerca de **+4.7 commits de variação** de uma semana para a seguinte, e um aumento de 1% no churn a **~1.0 commits de variação**. Escrever que «cada novo contribuidor acrescenta 4.7 commits por semana ao total» seria um erro de leitura: descreveria um efeito de nível, que este modelo não estima.
+  * `unique_authors` (Contribuidores): Coeficiente = **+4.6262** ($p$-value < 0.0001).
+  * `log_churn` (Code Churn): Coeficiente = **+102.9059** ($p$-value < 0.0001).
+  * **Como ler estes coeficientes:** o modelo está estimado em **primeiras diferenças** ($d = 1$), pelo que os coeficientes medem o efeito sobre a **variação semanal** da atividade, e não sobre o nível. Um contribuidor ativo adicional está associado a cerca de **+4.6 commits de variação** de uma semana para a seguinte, e um aumento de 1% no churn a **~1.0 commits de variação**. Escrever que «cada novo contribuidor acrescenta 4.6 commits por semana ao total» seria um erro de leitura: descreveria um efeito de nível, que este modelo não estima.
 * **Tabelas para o Relatório:** Inserir `tab_04_sarimax_results.csv` e `tab_05_comparacao_econometrica.csv`.
 * **Tabela de Especificações Box-Jenkins (`arima_arimax.csv`):**
   * *Conteúdo:* Resumo comparativo de todas as especificações ARIMA univariadas e ARIMAX multivariadas ajustadas, com ordens $(p, d, q)$, AIC, BIC e métricas preditivas.
@@ -57,12 +63,12 @@
 
 ## 5. Diagnóstico Residual e Validação de Ruído Branco (Capítulo 4.5 — Slides 55 e 70)
 * **Teste de Ljung-Box (Validação de Não-Autocorrelação):**
-  * Lag 1: $Q = 1.65$, $p\text{-value} = 0.1989$.
-  * Lag 5: $Q = 8.29$, $p\text{-value} = 0.1411$.
-  * Lag 10: $Q = 17.82$, $p\text{-value} = 0.0581$.
-  * Lag 15: $Q = 36.28$, $p\text{-value} = 0.0016$.
-  * Lag 20: $Q = 38.60$, $p\text{-value} = 0.0075$.
-  * **Conclusão:** $H_0$ não é rejeitada nos desfasamentos 1, 5 e 10, mas é rejeitada em 15 e 20. Os resíduos não podem ser declarados ruído branco: a autocorrelação reaparece a partir do desfasamento 15, compatível com o ciclo de release (~10 semanas), que um modelo linear com $s = 52$ não captura. É uma limitação a declarar no relatório.
+  * Lag 1: $Q = 0.20$, $p\text{-value} = 0.6527$.
+  * Lag 5: $Q = 4.36$, $p\text{-value} = 0.4986$.
+  * Lag 10: $Q = 13.93$, $p\text{-value} = 0.1763$.
+  * Lag 15: $Q = 31.71$, $p\text{-value} = 0.0070$.
+  * Lag 20: $Q = 36.05$, $p\text{-value} = 0.0152$.
+  * **Conclusão:** $H_0$ não é rejeitada nos desfasamentos 1, 5 e 10, mas é rejeitada em 15 e 20. Os resíduos não podem ser declarados ruído branco: resta autocorrelação a partir do desfasamento 15, mesmo com a fase do ciclo de release no modelo. A dummy de fase capta o nível médio de cada fase, não a cadência irregular dos ciclos (entre 8 e 15 semanas), pelo que a estrutura de médio prazo fica por explicar. É uma limitação a declarar no relatório.
 * **Teste de Normalidade de Jarque-Bera:**
   * $p\text{-value} < 0.0001$. A hipótese nula de normalidade estrita é rejeitada: os resíduos apresentam caudas pesadas, consistentes com os picos do ciclo de release identificados na análise exploratória.
 * **Figura para o Relatório:** Inserir `fig_04_diagnostico_residuos.[png|svg]`.

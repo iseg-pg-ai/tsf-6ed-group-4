@@ -1,18 +1,19 @@
 Modelo,Família,Regime,REQM (RMSE),EAM (MAE),EPAM (MAPE),EPAMs (sMAPE)
-LSTM Multivariado,Deep Learning,Multivariado (F=6),129.98,78.31,58.93,36.78
-1D-CNN Multivariado,Deep Learning,Multivariado (F=6),131.54,77.33,55.22,36.02
-GRU Multivariado,Deep Learning,Multivariado (F=6),132.68,79.54,55.1,37.94
-SimpleRNN Multivariado,Deep Learning,Multivariado (F=6),136.37,86.23,67.05,44.16
-SimpleRNN Univariado,Deep Learning,Univariado (F=1),141.5,91.36,73.76,44.04
-GRU Univariado,Deep Learning,Univariado (F=1),141.8,90.41,76.67,44.88
-1D-CNN Univariado,Deep Learning,Univariado (F=1),152.13,86.68,62.66,40.69
-LSTM Univariado,Deep Learning,Univariado (F=1),164.91,118.39,131.1,55.24
-"ARIMAX(0, 1, 2) + Covariáveis",Econometria Clássica,ARIMAX Multivariado,263.24,171.04,10.76,11.11
-"ARIMAX(1, 1, 1) + Covariáveis",Econometria Clássica,ARIMAX Multivariado,263.39,171.14,10.76,11.1
-"SARIMAX(0, 1, 2) + Covariáveis + Fourier",Econometria Clássica,ARIMAX Multivariado,263.51,172.3,10.79,11.1
-"ARIMAX(0, 1, 2) + Code Churn (s/ Contribuidores)",Econometria Clássica,ARIMAX Multivariado,463.63,355.67,25.22,22.17
-"ARIMA(0, 1, 2) Univariado",Econometria Clássica,ARIMA Univariado,614.75,485.02,36.78,30.07
-"ARIMA(1, 1, 1) Univariado",Econometria Clássica,ARIMA Univariado,615.12,485.35,36.77,30.09
+LSTM Multivariado,Deep Learning,Multivariado (F=6),129.81,78.88,62.08,37.1
+1D-CNN Multivariado,Deep Learning,Multivariado (F=6),130.98,76.36,52.57,35.7
+GRU Multivariado,Deep Learning,Multivariado (F=6),132.09,79.08,54.16,37.53
+SimpleRNN Multivariado,Deep Learning,Multivariado (F=6),136.61,85.74,66.11,44.02
+1D-CNN Univariado,Deep Learning,Univariado (F=1),140.28,84.9,70.15,39.62
+SimpleRNN Univariado,Deep Learning,Univariado (F=1),141.62,91.62,74.2,43.64
+GRU Univariado,Deep Learning,Univariado (F=1),160.77,113.89,122.96,53.71
+LSTM Univariado,Deep Learning,Univariado (F=1),163.17,116.94,130.96,54.76
+"ARIMAX(0, 1, 2) + Covariáveis + Fase de Release",Econometria Clássica,ARIMAX Multivariado,254.0,161.41,10.08,10.39
+"SARIMAX(0, 1, 2) + Covariáveis + Fourier",Econometria Clássica,ARIMAX Multivariado,261.53,170.99,10.76,11.08
+"ARIMAX(0, 1, 2) + Covariáveis",Econometria Clássica,ARIMAX Multivariado,261.59,170.05,10.74,11.11
+"ARIMAX(1, 1, 1) + Covariáveis",Econometria Clássica,ARIMAX Multivariado,261.76,170.17,10.74,11.09
+"ARIMAX(0, 1, 2) + Code Churn (s/ Contribuidores)",Econometria Clássica,ARIMAX Multivariado,459.2,350.81,24.77,21.82
+"ARIMA(0, 1, 2) Univariado",Econometria Clássica,ARIMA Univariado,614.76,485.03,36.78,30.07
+"ARIMA(1, 1, 1) Univariado",Econometria Clássica,ARIMA Univariado,615.12,485.36,36.76,30.09
 Holt Linear,Econometria Clássica,Alisamento Exponencial,618.21,486.28,38.86,30.04
 Holt-Winters Aditivo (s=52),Econometria Clássica,Alisamento Exponencial,643.53,510.5,41.81,31.14
 Holt-Winters Multiplicativo (s=52),Econometria Clássica,Alisamento Exponencial,663.81,519.43,42.84,31.47

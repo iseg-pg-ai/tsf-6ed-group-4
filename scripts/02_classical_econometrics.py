@@ -91,6 +91,17 @@ def carregar_dados_e_dividir() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame
     df["sin_52_2"] = np.sin(2 * np.pi * 2 * t / 52.0)
     df["cos_52_2"] = np.cos(2 * np.pi * 2 * t / 52.0)
 
+    # Fase do ciclo de release em três níveis, derivada de `weeks_since_release`.
+    # A merge window (semanas 0-1) é a categoria de referência das especificações
+    # ARIMAX, pelo que só as outras duas entram no modelo como dummies. As 10 semanas
+    # anteriores ao primeiro tag ficam NaN (desconhecido) e nunca 0.
+    # Justificação e evidência: scripts/analise_covariaveis_release/README.md
+    semanas_release = df["weeks_since_release"].astype("float64")
+    release_conhecido = semanas_release.notna()
+    df["fase_merge"] = (semanas_release <= 1).where(release_conhecido).astype("float64")
+    df["fase_rc_inicial"] = ((semanas_release >= 2) & (semanas_release <= 5)).where(release_conhecido).astype("float64")
+    df["fase_rc_final"] = (semanas_release >= 6).where(release_conhecido).astype("float64")
+
     # Divisão estritamente cronológica 80:20 (class-code/1.py)
     train, test = dividir_treino_teste(df, "semanas")
 
@@ -361,27 +372,40 @@ def modelar_arima_arimax(
 ) -> tuple[dict, tuple[str, SARIMAXResultsWrapper, list[str] | None]]:
     """Estima especificações univariadas (ARIMA) e multivariadas (ARIMAX).
 
-    Adiciona covariáveis exógenas (contribuidores e code churn) e termos harmónicos de Fourier.
+    Adiciona covariáveis exógenas (contribuidores, code churn), termos harmónicos de
+    Fourier e a fase do ciclo de release. Todas as especificações são estimadas na
+    mesma amostra de treino (as semanas com fase de release conhecida), para que a
+    escolha do vencedor por REQM compare modelos estimados nas mesmas observações.
     """
     print("[*] A estimar modelos Box-Jenkins (ARIMA e ARIMAX com covariáveis exógenas)...")
 
-    y_train = train["total_commits"]
+    # As variáveis do ciclo de release não existem antes do primeiro tag (10 semanas
+    # de 2005). Excluí-las da amostra de estimação é o que permite comparar modelos
+    # com e sem a fase sem lhes dar amostras de tamanhos diferentes.
+    colunas_fase = ["fase_rc_inicial", "fase_rc_final"]
+    amostra = train.dropna(subset=colunas_fase)
+
+    y_train = amostra["total_commits"]
     y_test = test["total_commits"]
     n_passos = len(test)
 
     # Conjuntos de variáveis exógenas
     exog_churn_only = ["log_churn"]
     exog_cols = ["unique_authors", "log_churn"]
+    exog_fase_cols = exog_cols + colunas_fase
     fourier_cols = ["sin_52_1", "cos_52_1", "sin_52_2", "cos_52_2"]
     exog_fourier_cols = exog_cols + fourier_cols
 
-    X_train_churn = train[exog_churn_only]
+    X_train_churn = amostra[exog_churn_only]
     X_test_churn = test[exog_churn_only]
 
-    X_train_base = train[exog_cols]
+    X_train_base = amostra[exog_cols]
     X_test_base = test[exog_cols]
 
-    X_train_fourier = train[exog_fourier_cols]
+    X_train_fase = amostra[exog_fase_cols]
+    X_test_fase = test[exog_fase_cols]
+
+    X_train_fourier = amostra[exog_fourier_cols]
     X_test_fourier = test[exog_fourier_cols]
 
     especificacoes = [
@@ -410,6 +434,16 @@ def modelar_arima_arimax(
             X_train_base,
             X_test_base,
             exog_cols,
+        ),
+        # A fase do ciclo de release entra como duas dummies (merge window = referência).
+        # É a única covariável conhecida antes de a semana começar; ver
+        # scripts/analise_covariaveis_release/README.md para a evidência da escolha.
+        (
+            "ARIMAX(0, 1, 2) + Covariáveis + Fase de Release",
+            (0, 1, 2),
+            X_train_fase,
+            X_test_fase,
+            exog_fase_cols,
         ),
         # Modelo SARIMAX com Covariáveis + Harmónicas de Fourier (s=52)
         (
@@ -874,6 +908,8 @@ def exportar_resumo_econometria(
     jb_pval: float,
     df_futuro: pd.DataFrame,
     corr_diag: dict[str, object],
+    train: pd.DataFrame,
+    test: pd.DataFrame,
 ) -> None:
     """Gera um documento Markdown com o resumo interpretativo completo em Português de Portugal
 
@@ -928,12 +964,49 @@ def exportar_resumo_econometria(
             return str(valor)
         return "< 0.0001" if numero < 0.0001 else f"= {numero:.4f}"
 
-    if lags_rejeitam:
-        lb_leitura = (
-            f"Os resíduos não podem ser declarados ruído branco: a autocorrelação reaparece a partir do "
-            f"desfasamento {min(lags_rejeitam)}, compatível com o ciclo de release (~10 semanas), que um modelo "
-            "linear com $s = 52$ não captura. É uma limitação a declarar no relatório."
+    def valor_param(nome: str) -> object:
+        """Lê um parâmetro do modelo vencedor, devolvendo 'n/d' se ele não o incluir."""
+        linhas = df_params.loc[df_params["Parâmetro"] == nome, "Coeficiente"]
+        return linhas.values[0] if not linhas.empty else "n/d"
+
+    def pval_param(nome: str) -> object:
+        linhas = df_params.loc[df_params["Parâmetro"] == nome, "p-value (P > |z|)"]
+        return linhas.values[0] if not linhas.empty else "n/d"
+
+    # Contributo incremental da fase de release: é a única forma honesta de justificar
+    # a variável, porque o ganho global da Secção 4 é dominado por autores e churn.
+    linha_sem_fase = df_comp[df_comp["Modelo"] == "ARIMAX(0, 1, 2) + Covariáveis"]
+    if "Fase de Release" in str(melhor_modelo_row["Modelo"]) and not linha_sem_fase.empty:
+        reqm_sem_fase = float(linha_sem_fase.iloc[0]["REQM"])
+        reqm_com_fase = float(melhor_modelo_row["REQM"])
+        ganho_fase = (
+            f"o modelo com a fase reduz o REQM em {((reqm_sem_fase - reqm_com_fase) / reqm_sem_fase) * 100:.1f}% "
+            f"face à especificação sem ela ({reqm_com_fase:.2f} contra {reqm_sem_fase:.2f}), na mesma amostra "
+            "de treino"
         )
+    else:
+        ganho_fase = "a especificação com a fase do ciclo de release não superou o modelo sem ela em REQM"
+
+    # Tamanhos de amostra: a comparação entre especificações só é válida porque todas
+    # são estimadas nas mesmas observações (ver modelar_arima_arimax).
+    n_treino = len(train)
+    n_treino_bj = int(train["fase_rc_inicial"].notna().sum())
+    n_teste = len(test)
+
+    if lags_rejeitam:
+        if "Fase de Release" in str(melhor_modelo_row["Modelo"]):
+            lb_leitura = (
+                f"Os resíduos não podem ser declarados ruído branco: resta autocorrelação a partir do "
+                f"desfasamento {min(lags_rejeitam)}, mesmo com a fase do ciclo de release no modelo. A dummy de "
+                "fase capta o nível médio de cada fase, não a cadência irregular dos ciclos (entre 8 e 15 semanas), "
+                "pelo que a estrutura de médio prazo fica por explicar. É uma limitação a declarar no relatório."
+            )
+        else:
+            lb_leitura = (
+                f"Os resíduos não podem ser declarados ruído branco: a autocorrelação reaparece a partir do "
+                f"desfasamento {min(lags_rejeitam)}, compatível com o ciclo de release (~10 semanas), que um modelo "
+                "linear com $s = 52$ não captura. É uma limitação a declarar no relatório."
+            )
     else:
         lb_leitura = "Os resíduos são compatíveis com ruído branco em toda a extensão testada."
 
@@ -972,6 +1045,14 @@ def exportar_resumo_econometria(
         "coef_churn": coef_churn,
         "pval_churn": formatar_pvalor(pval_churn),
         "efeito_churn_1pct": f"{efeito_churn_1pct:.1f}",
+        "coef_fase_rc_inicial": valor_param("fase_rc_inicial"),
+        "pval_fase_rc_inicial": formatar_pvalor(pval_param("fase_rc_inicial")),
+        "coef_fase_rc_final": valor_param("fase_rc_final"),
+        "pval_fase_rc_final": formatar_pvalor(pval_param("fase_rc_final")),
+        "ganho_fase": ganho_fase,
+        "n_treino": n_treino,
+        "n_treino_bj": n_treino_bj,
+        "n_teste": n_teste,
         "lb_ok_txt": listar_lags(lags_ok),
         "lb_rejeita_txt": listar_lags(lags_rejeitam),
         "lb_leitura": lb_leitura,
@@ -1002,7 +1083,9 @@ def main():
     df_params, lb_teste, jb_pval = executar_diagnostico_residuos(modelo_vencedor_info)
     df_comp = consolidar_comparacao_econometrica(train, test, modelos_exp, modelos_bj)
     df_futuro = projetar_futuro_holt_winters(df, modelos_exp, horizonte=52)
-    exportar_resumo_econometria(df_adf, df_comp, df_params, lb_teste, jb_pval, df_futuro, corr_diag)
+    exportar_resumo_econometria(
+        df_adf, df_comp, df_params, lb_teste, jb_pval, df_futuro, corr_diag, train, test
+    )
     finalizar_script("02")
 
 

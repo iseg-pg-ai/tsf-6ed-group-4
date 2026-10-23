@@ -39,10 +39,16 @@
 ---
 
 ## 4. Modelação Box-Jenkins: Ganho Estrutural com Covariáveis Exógenas (Capítulo 4.4 — Slides 67 a 74)
+* **Amostra de estimação:** divisão cronológica 80:20 com {{ n_treino }} semanas de treino e {{ n_teste }} de teste (2022 a 2026). As 10 semanas anteriores ao primeiro *tag* de release não têm fase conhecida, pelo que todas as especificações Box-Jenkins são estimadas nas mesmas **{{ n_treino_bj }} semanas**. É isso que torna a comparação como-para-como: sem esta restrição, o modelo com a fase teria uma amostra diferente do modelo sem ela.
 * **Confronto Univariado vs. Multivariado:**
   * **ARIMA(0, 1, 2) Univariado:** REQM = **{{ arima_reqm }}**, EPAM = **{{ arima_epam }}%** (AIC = {{ arima_aic }}).
   * **{{ melhor_modelo }}:** REQM = **{{ melhor_reqm }}**, EPAM = **{{ melhor_epam }}%** (AIC = {{ melhor_aic }}).
-  * **Ganho Percentual:** A introdução das covariáveis de engenharia reduziu o REQM em **{{ ganho_reqm_pct }}%** e o EPAM de **{{ arima_epam }}%** para **{{ melhor_epam }}%**.
+  * **Ganho Percentual:** A introdução das covariáveis exógenas reduziu o REQM em **{{ ganho_reqm_pct }}%** e o EPAM de **{{ arima_epam }}%** para **{{ melhor_epam }}%**.
+* **Fase do ciclo de release (merge window como referência):**
+  * `fase_rc_inicial` (estabilização inicial, rc1-5): Coeficiente = **{{ coef_fase_rc_inicial }}** ($p$-value {{ pval_fase_rc_inicial }}).
+  * `fase_rc_final` (estabilização final, rc6+): Coeficiente = **{{ coef_fase_rc_final }}** ($p$-value {{ pval_fase_rc_final }}).
+  * **Contributo da variável:** {{ ganho_fase }}.
+  * **Como ler:** estando o modelo em primeiras diferenças, cada coeficiente compara o **ritmo semanal** dessa fase com o da merge window, e não o nível de commits. São médias de 2005-2026 e o efeito inverte de sinal em 2015 (ver `tab_02_outliers.csv`), pelo que a média esconde a heterogeneidade entre eras. A fase é a única covariável conhecida antes de a semana começar; a justificação da escolha e a comparação com as alternativas estão em `scripts/analise_covariaveis_release/README.md`.
 * **Significância dos Coeficientes das Covariáveis (Slide 70):**
   * `unique_authors` (Contribuidores): Coeficiente = **+{{ coef_autores }}** ($p$-value {{ pval_autores }}).
   * `log_churn` (Code Churn): Coeficiente = **+{{ coef_churn }}** ($p$-value {{ pval_churn }}).

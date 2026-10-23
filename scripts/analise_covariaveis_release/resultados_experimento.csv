@@ -1,0 +1,9 @@
+Especificação,Exógenas,REQM,EPAM (%),AIC,Ljung-Box 15 (p),Ljung-Box 20 (p)
+Covariáveis (controlo),2,261.59,10.74,11464.54,0.001,0.0054
++ is_merge_window (dummy),3,260.81,10.4,11453.27,0.0014,0.0094
++ weeks_since_release (contagem),3,260.78,10.83,11462.92,0.0021,0.0077
++ rc_week (contagem),3,259.48,10.8,11459.7,0.0028,0.0087
+Só fase (sem covariáveis),2,577.37,34.72,13188.22,0.0,0.0
++ Fase: 2 dummies (merge = referência),4,254.0,10.08,11423.96,0.007,0.0152
++ Fase: 3 dummies (sem referência),5,254.0,10.08,11425.95,0.0074,0.016
++ Fase x Era (interação 2015+),6,254.03,10.15,11427.56,0.0049,0.0121
