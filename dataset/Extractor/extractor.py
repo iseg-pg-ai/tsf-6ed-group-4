@@ -451,8 +451,13 @@ def enrich_with_release_cycle(ts_df: pd.DataFrame, releases: pd.DataFrame, rule:
     merged["weeks_since_release"] = weeks
     merged["is_merge_window"] = (weeks < MERGE_WINDOW_WEEKS).astype("Int64")
 
+    # Observations before the first tag keep NA in every release-cycle column.
+    # The comparison below is built from `notna()` first so that `mask` never
+    # receives a nullable condition: pandas would treat NA as True and silently
+    # turn "unknown" into "merge window".
     phase = weeks - (MERGE_WINDOW_WEEKS - 1)
-    merged["rc_week"] = phase.mask(phase < 0, 0).astype("Int64")
+    negative = phase.notna() & (phase < 0)
+    merged["rc_week"] = phase.mask(negative, 0).astype("Int64")
 
     merged = merged.drop(columns=["_reference_date"]).set_index("committer_date").sort_index()
 

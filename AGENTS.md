@@ -1,117 +1,56 @@
 # AGENTS.md — Repository Context & Instructions
 
-## 1. Project Context & Deliverables
-* **Course:** Time Series Forecasting (2026/27, 6th Edition) — ISEG Executive Education (PG in Applied AI & ML).
-* **Core Problem:** Econometric and deep learning time series modeling of continuous software development velocity across the 20-year commit history (1.39M+ commits, April 2005 – September 2026) of the **Linux Kernel mainline repository**.
-* **Deliverable Requirements:** 15–20 page technical report comparing $\ge 2$ forecasting families (e.g., Classical Econometrics vs Deep Learning Sequence Models) + oral defense.
+## 1. What this repo is
 
----
+* ISEG Time Series Forecasting (2026/27, 6th Ed.), group 4: forecast **Linux Kernel commit velocity** over 1.39M commits (2005-04 to 2026-09) and compare at least two forecasting families (classical econometrics vs deep learning).
+* Deliverable is a 15-20 page report plus defense. Everything under `output/` (figures, tables, `*_SUMMARY.md`) **is** the report's evidence, and is tracked in Git.
 
-## 2. Critical Operational Gotchas
+## 2. Running things
 
-### ⚠️ GitHub 100 MB Limit (`kernel_raw_commits.csv`)
-* `dataset/Extractor/kernel_raw_commits.csv` is **~175 MB**. It is git-ignored and **must never be committed to Git**.
-* The resampled series `dataset/kernel_daily_ts.csv` (~366 KB) and `dataset/kernel_weekly_ts.csv` (~63 KB) are tracked in Git.
-* If accidentally staged, unstage immediately:
+* All code uses `uv` with PEP 723 inline dependencies. No `pyproject.toml`, no lockfile, no test suite.
+* Run scripts **from the repo root** as `uv run scripts/0X_....py`. Imports are flat (`from utils import ...`, `from arquitecturas_neuronais import ...`), so they only resolve because the script's own directory goes on `sys.path`. Invoking them as `python -m scripts.01_...`, importing them from a notebook, or running from another cwd breaks them.
+* Order matters: `01` -> `02` -> `03` -> `04`. Script 04 does not compute anything; it only reads `output/tables/tab_05_comparacao_econometrica.csv` (from 02) and `tab_07_dl_benchmark_metricas.csv` (from 03), so it fails on a partial run.
+* Script 03 is the slow step (7-10 min, 15 epochs). It is deliberately pinned to CPU (`device = torch.device("cpu")`, line 70) because the local GPU (NVIDIA MX150, compute capability 6.1) has no kernels in current PyTorch builds. Do not "optimise" this back to CUDA.
+* Regenerating the dataset (about 3s, deterministic, no Git needed because both caches exist):
   ```bash
-  git restore --staged dataset/Extractor/kernel_raw_commits.csv
+  uv run dataset/Extractor/extractor.py            # rebuild daily + weekly CSVs
+  uv run dataset/Extractor/extractor.py --force-tags    # re-walk refs/tags (~1s)
+  uv run dataset/Extractor/extractor.py --force-extract # re-walk 1.39M commits (slow)
   ```
+  The two `--force-*` flags require a local clone at the path printed in the banner (currently `~/.local/gits/linux`).
 
-### ⚠️ Boundary Anomalies (Tail & Head Cleaning)
-* **Tail cutoff (drop last row):** Extraction ended mid-week on `2026-09-08` / `2026-09-14` with only 2 commits. You **must drop the incomplete final row** (`df.iloc[:-1]`) before fitting models or splitting data to prevent artificial forecast collapse.
-* **Head outlier (churn spike):** The first observation (`2005-04-18` weekly / `2005-04-16` daily) is Linus Torvalds' initial Git import, adding 6.75M lines in a single commit. While commit counts are valid, code churn (`insertions`, `total_churn`, `net_code_growth`) has extreme leverage in this initial bucket.
+## 3. Data invariants (the mistakes an agent actually makes)
 
-### ⚠️ Explicit Frequency for `statsmodels`
-* `pd.read_csv` does not infer or persist datetime frequencies.
-* Always explicitly assign `df.index.freq = 'W-MON'` (weekly) or `df.index.freq = 'D'` (daily) right after indexing. Without this, `SARIMAX` and `ExponentialSmoothing` raise warnings or fail to calculate out-of-sample forecast steps.
+* `dataset/Extractor/kernel_raw_commits.csv` is ~175 MB and git-ignored. It must never be staged.
+* The **last row of both CSVs is an incomplete bin** (extraction stopped mid-week on 2026-09-08). `utils.carregar_serie_temporal` already applies `.iloc[:-1]`; calling `.iloc[:-1]` again silently drops a real week.
+* `pd.read_csv` does not restore the datetime frequency. Always set `df.index.freq = "W-MON"` (weekly) or `"D"` (daily); `statsmodels` needs it to resolve out-of-sample steps.
+* A `W-MON` label marks the **end** of the bin, not the start: the row dated `2026-09-14` covers `2026-09-08` to `2026-09-14` (hence its 2 commits). Any per-bin join against a calendar must evaluate at `label - 6 days`, or the release phase shifts by one week.
+* Columns 11-15 (`last_release_tag`, `last_release_date`, `weeks_since_release`, `is_merge_window`, `rc_week`) are NULL for the 10 weekly / 62 daily rows that precede the first available tag. NULL means *unknown*, never 0 and never "merge window". They are built with `merge_asof(direction="backward")` over **final** releases only; adding `-rc` tags or the next release date would introduce look-ahead bias.
+* The release cycle, not the calendar, produces the extreme weeks, and its sign flips in 2015. Of the 40 weeks flagged by the `|Z| > 2` additive-residual test, all fall either in the merge window or in the final rc weeks and none in rc1-rc5. Split by era: 2005-2014 gives 19 positive peaks in the merge window against 4 late-cycle, while 2015-2026 gives 0 positive and all 6 negative drops there, with 11 peaks moving to the late cycle. Raw means agree (~1.0k commits in the modern merge window against ~1.8k elsewhere). Cause: a commit is dated when it was committed on the maintainer branch, so feature work never lands inside the window. Never quote a pooled merge-window statistic without the era split. Script 01 labels outliers from `weeks_since_release` via `classificar_fase_release` and the `FASE_*` constants; the month-based heuristic was removed and must not come back.
+* Head outlier: the first observation contains the 6.75M-line initial import, so churn columns there have extreme leverage. Tail trough: the last clean weeks are `1042 / 638 / 415` commits and dominate any weekly REQM — check them before blaming a model.
+* None of the five release columns is used by any model yet. Wiring `weeks_since_release` in as a covariate is the open modelling task, not a completed one.
 
-```python
-# Standard loading template
-import pandas as pd
+## 4. Code layout
 
-# Weekly
-df_w = pd.read_csv("dataset/kernel_weekly_ts.csv", parse_dates=["committer_date"], index_col="committer_date").iloc[:-1]
-df_w.index.freq = "W-MON"
+* `scripts/utils.py` — the only place paths and shared behaviour live: `DATASET_DIR`, `PNG_DIR`, `SVG_DIR`, `TABLES_DIR`, `RC_PARAMS`, `carregar_serie_temporal`, `dividir_treino_teste`, `calcular_metricas`, `guardar_figura`, `guardar_tabela`, `guardar_markdown`, `renderizar_template`. New code must use these instead of rebuilding paths; `DATASET_DIR` also has a `Dataset` capitalisation fallback for case-insensitive filesystems.
+* `scripts/arquitecturas_neuronais/` — the four torch models (1D-CNN, simple RNN, LSTM, GRU) as classes; script 03 holds the training loop and the sliding-window preparation.
+* `scripts/templates/*.md` — templates whose placeholders are filled by `renderizar_template`.
+* `output/*_SUMMARY.md` are **generated**. Edit `scripts/templates/*.md` and re-run, never the output file.
+* Artifact numbering is contractual for the report: `fig_00`-`fig_08` (plus `fig_00_matriz_correlacao_pearson`/`spearman` and `fig_05b`), `tab_00`-`tab_08` (plus `tab_00_matriz_correlacao_pearson`/`spearman` and `tab_05b`). Append new artifacts (`fig_09`, `tab_09`) rather than renumbering, or every reference in `GUIA_RELATORIO_E_DIVISAO_TRABALHO.md` goes stale.
+* `class-code/` is the instructors' reference implementation, not part of the pipeline. `docs/` holds the course PDFs.
 
-# Daily
-df_d = pd.read_csv("dataset/kernel_daily_ts.csv", parse_dates=["committer_date"], index_col="committer_date").iloc[:-1]
-df_d.index.freq = "D"
-```
+## 5. Conventions
 
----
+* Prose, printed output, plot labels and the report summaries are in **European Portuguese**; dataset column names, identifiers and the extractor docstrings are in **English**. Keep that split.
+* No emojis anywhere, including in these files.
+* Target line length is **120**, set only in `.vscode/settings.json` — no `ruff.toml` or `pyproject.toml` is committed. A bare `ruff format` reformats the whole repo at 88; use `ruff format --line-length 120` if you must, or leave formatting alone.
+* There are no tests. Verification means re-running the affected script and inspecting the regenerated `output/` artefacts, which are deterministic given the CSVs.
+* Changing the dataset schema requires updating `dataset/dataset_fields_description.md`, which documents all 15 columns for a non-technical audience. Some literal values quoted there predate the current CSVs; the data wins.
+* Methodological red lines (graded): chronological splits only, never shuffle; scalers fitted on the training split only; ADF before differencing; Ljung-Box on residuals. Note that `output/ECONOMETRICS_SUMMARY.md` quotes only lags 1 and 10, while the ARIMAX residuals reject at lags 15 and 20 — do not claim white noise without re-running the test.
 
-## 3. Tooling & Execution Commands
+## 6. Where the context lives
 
-Run all Python workflows with [`uv`](https://github.com/astral-sh/uv). No persistent virtual environment is required.
-
-### Modeling & Analysis Scripts
-* **PEP 723 inline dependencies (preferred):** Add metadata headers to new scripts:
-  ```python
-  # /// script
-  # dependencies = ["pandas", "statsmodels", "matplotlib", "scikit-learn"]
-  # ///
-  ```
-  Execute directly with:
-  ```bash
-  uv run <script_path.py>
-  ```
-* **Ad-hoc one-liners or interactive scripts:**
-  ```bash
-  uv run --with "pandas,numpy,statsmodels,scipy,matplotlib,seaborn,pmdarima,scikit-learn" python <script_path.py>
-  ```
-* **Deep Learning scripts:**
-  ```bash
-  uv run --with "torch,pandas,numpy,matplotlib,scikit-learn" python <script_path.py>
-  ```
-
-### Extractor Pipeline (`dataset/Extractor/extractor.py`)
-* The pre-extracted dataset is already available; **do not clone the ~50 GB Linux Git repo** for modeling tasks.
-* Fast resample regeneration from existing `kernel_raw_commits.csv` (~15s):
-  ```bash
-  uv run dataset/Extractor/extractor.py
-  ```
-* Full Git extraction (only needed when regenerating from a local bare clone):
-  ```bash
-  uv run dataset/Extractor/extractor.py /path/to/linux-bare.git --force-extract --workers 8
-  ```
-
----
-
-## 4. dataset Schemas & Modeling Conventions
-
-### Files & Granularity
-* **`dataset/kernel_weekly_ts.csv`** (`W-MON`, 1,117 clean observations): Mondays. Primary series for classical econometrics:
-  * Decomposition (Additive & Multiplicative, trend vs holiday/summer seasonality)
-  * Holt-Winters Exponential Smoothing ($s=52$)
-  * ARIMA / SARIMA
-  * ARIMAX / SARIMAX with exogenous covariates
-* **`dataset/kernel_daily_ts.csv`** (`D`, 7,815 clean observations): Daily series with day-of-week micro-seasonality ($s=7$). Primary series for Deep Learning sliding-window sequence models (1D-CNN, RNN, LSTM, GRU).
-* **`dataset/Extractor/kernel_raw_commits.csv`**: Raw event log (~1.39M rows, git-ignored).
-
-### Variables & Roles
-* **Targets ($Y_t$):** `total_commits` (gross activity) or `non_merge_commits` (direct engineering work, excluding merge commits).
-* **Exogenous Features ($X_t$):**
-  * `unique_authors` ($X_{1,t}$): Distinct active contributors (team capacity proxy).
-  * `total_churn` ($X_{2,t}$): `insertions + deletions` (code volatility proxy).
-  * `net_code_growth` ($X_{3,t}$): `insertions - deletions` (net codebase expansion).
-  * `files_changed` ($X_{4,t}$): Breadth of code modifications.
-
----
-
-## 5. Methodological & Evaluation Standards (ISEG Curriculum)
-
-1. **Chronological Splitting:**
-   * Always split chronologically (e.g., 80/20 train/test). **Never shuffle or randomly partition time series data**.
-2. **Stationarity & Differencing:**
-   * Test levels first with Augmented Dickey-Fuller (`adfuller`).
-   * For seasonal data, apply seasonal differencing $\nabla_s Y_t = (1 - B^s)Y_t$ before simple differencing $\nabla Y_t = (1 - B)Y_t$.
-3. **Residual Diagnostics (Mandatory):**
-   * Residuals must be white noise: verify absence of autocorrelation using Ljung-Box test (`acorr_ljungbox`, require $p\text{-value} > 0.05$).
-   * Evaluate normality with Jarque-Bera and histogram / Q-Q plots.
-4. **Model Selection & Evaluation Metrics:**
-   * In-sample selection: Minimum AIC / BIC.
-   * Out-of-sample evaluation: Compare static (one-step ahead) and dynamic (multi-step ahead recursive) forecasts on test data using:
-     * **RMSE / REQM:** $\sqrt{\frac{1}{m}\sum (Y_t - \hat{Y}_t)^2}$
-     * **MAE / EAM:** $\frac{1}{m}\sum |Y_t - \hat{Y}_t|$
-     * **MAPE / EPAM:** $\frac{1}{m}\sum \left|\frac{Y_t - \hat{Y}_t}{Y_t}\right| \times 100\%$
-     * **sMAPE / EPAMs:** $\frac{1}{m}\sum \frac{|Y_t - \hat{Y}_t|}{|Y_t| + |\hat{Y}_t|} \times 200\%$
+* `README.md` — quickstart and directory tree (its tree is stale, this file is authoritative).
+* `GUIA_RELATORIO_E_DIVISAO_TRABALHO.md` — report structure, chapter-to-artifact mapping, work split.
+* `CONCEITOS_E_GLOSSARIO.md` — method glossary (decomposition, ARIMA, DL architectures).
+* `dataset/dataset_fields_description.md` — field guide, including the release-calendar semantics.

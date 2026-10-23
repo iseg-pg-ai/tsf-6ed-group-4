@@ -322,14 +322,19 @@ This is the most useful column for explaining why some weeks are busy and others
 ---
 
 ### Column 14: `is_merge_window`
-* **Plain-English Name:** Planned Integration Surge Flag
+* **Plain-English Name:** Integration Phase Flag
 * **Data Type:** `1` or `0`; may be empty
 
 #### What It Means in Practice
-`1` marks the **merge window**: the roughly two-week period immediately after a release, when subsystem maintainers submit the work they have been accumulating while the code was frozen. In this dataset the flag is simply `weeks_since_release` equal to `0` or `1`.
+`1` marks the **merge window**: the roughly two-week period immediately after a release, when the tree is reopened to new work and the maintainers hand over what they prepared during the previous cycle. In this dataset the flag is simply `weeks_since_release` equal to `0` or `1`.
+
+#### A Counter-Intuitive Detail, Verified on This Data
+Each row counts a commit on the day it was **committed** — and for work delivered through a maintainer branch, that day falls *before* the merge window opens, because the individual changes are written on the branch first and only travel to the mainline at integration time. What the merge window therefore contains, by date, is the integration itself.
+
+The consequence is easy to get wrong in a report: **from 2015 onwards the merge window is the quietest part of the cycle**, and weekly volume climbs to its peak in the final weeks of the stabilisation phase, just before the next release. Before 2015 the pattern was the opposite, with the merge window as the busiest period, so a chart spanning the whole series shows two different regimes.
 
 #### Why Collaborators Care
-This is the column that separates a **planned burst** from organic growth. A spike in `total_commits` while `is_merge_window = 1` is business as usual and should not be read as a sudden productivity gain; the same spike while `is_merge_window = 0` deserves a much closer look.
+It separates a phase in which work is being **integrated** from a phase in which it is being **written**, which is exactly the distinction a reader needs in order not to misread a quiet week as a stalled team. An empty merge window means nothing was ready to hand over; an empty rc week means people stopped sending fixes and the next release is at risk.
 
 ---
 
@@ -343,7 +348,7 @@ Once the merge window closes, the project enters the **release-candidate (rc) ph
 A value of `0` means the period belongs to the merge window rather than the stabilisation phase. It does **not** mean "no activity".
 
 #### Why Collaborators Care
-The two phases differ in the *character* of the work, not only in its volume: the merge window brings large structural changes, while the rc phase brings small, targeted fixes. If your QA effort is keyed to risk, this column tells you which kind of work to expect.
+The two phases differ in the *character* of the work: large structural changes are integrated during the merge window, small targeted fixes during the rc phase. Read together with the volume caveat in Column 14, this lets you interpret a commits chart as a picture of the release process rather than as a picture of effort.
 
 ---
 
@@ -403,7 +408,7 @@ rc_week = max(0, weeks_since_release - 1)
 | **`last_release_tag`** | Which release was in force | No | Not applicable (text); newer tags = more recently shipped version |
 | **`last_release_date`** | When that release shipped | No | Not applicable (date); later dates = closer to the present |
 | **`weeks_since_release`** | Release-cycle clock | No | Later in the cycle; stabilisation work, lower volume |
-| **`is_merge_window`** | Planned integration surge (`1`/`0`) | No | The two-week post-release push |
+| **`is_merge_window`** | Integration phase (`1`/`0`) | No | The two-week window after a release; the quietest part of the modern cycle |
 | **`rc_week`** | Stabilisation week counter | No | Later rc stage; closer to the next release |
 
 ---
@@ -470,10 +475,10 @@ When collaborating with developers and engineering leads, you can use these metr
    *(Helps align product delivery timelines).*
 4. **"Our `net_code_growth` has been negative for three weeks straight. Great job cleaning up technical debt!"**  
    *(Celebrates quality and simplification, not just raw volume).*
-5. **"`total_commits` doubled but `is_merge_window` is 1 — is that the planned integration surge, or are we simply delivering late?"**  
-   *(Separates the predictable post-release push from genuine schedule slippage, which is the difference between a healthy cadence and a team in trouble).*
-6. **"`weeks_since_release` is sitting at 9 and the next release has not shipped. Was the cycle extended on purpose?"**  
-   *(A stretched cycle usually signals either a large batch of late-arriving work or a quality problem that delayed the stabilisation phase).*
+5. **"The two weeks after the release are the quietest of the quarter. Did the team stop working, or is that simply what integration looks like?"**  
+   *(Separates a normal post-release trough from a genuine slowdown, which is the difference between a healthy cadence and a team in trouble).*
+6. **"The last weeks before a release are the busiest of the cycle — is that the stabilisation phase working as intended, or are fixes being batched at the deadline?"**  
+   *(A late-cycle burst is expected, but a burst concentrated in the final days usually means the earlier weeks were under-resourced).*
 
 ---
 

@@ -44,7 +44,7 @@ from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.stats.diagnostic import acorr_ljungbox
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from statsmodels.tsa.statespace.sarimax import SARIMAX, SARIMAXResultsWrapper
-from statsmodels.tsa.stattools import adfuller
+from statsmodels.tsa.stattools import acf, adfuller
 from utils import (
     PNG_DIR,
     RC_PARAMS,
@@ -169,10 +169,12 @@ def executar_testes_adf(train: pd.DataFrame) -> pd.DataFrame:
 
 
 # Correlogramas FAC e FACP (fig_03_fac_facp.[png|svg]) — Slides 35-45, 51
-def criar_correlogramas_fac_facp(train: pd.DataFrame) -> None:
+def criar_correlogramas_fac_facp(train: pd.DataFrame) -> dict[str, object]:
     """Gera o painel de correlogramas (FAC e FACP) comparando a série em níveis
 
     com a série diferenciada, cobrindo 60 desfasamentos (para evidenciar s=52).
+    Devolve o diagnóstico quantitativo do correlograma diferenciado, para que a
+    síntese escrita descreva o que a figura mostra em vez de o presumir.
     """
     print("[*] A gerar correlogramas FAC e FACP (fig_03_fac_facp)...")
 
@@ -188,6 +190,30 @@ def criar_correlogramas_fac_facp(train: pd.DataFrame) -> None:
 
     y_niveis = train["total_commits"].dropna()
     y_diff = train["total_commits"].diff(1).dropna()
+
+    # Diagnóstico do correlograma da série diferenciada: quais os desfasamentos
+    # que excedem a banda de confiança e se existe pico no desfasamento anual.
+    valores_acf = acf(y_diff, nlags=60, fft=False)
+    valores_acf_niveis = acf(y_niveis, nlags=60, fft=False)
+    banda_acf = 1.96 / np.sqrt(len(y_diff))
+    lags_significativos = [lag for lag in range(1, 61) if abs(valores_acf[lag]) > banda_acf]
+    lag_pico = max(range(1, 61), key=lambda lag: abs(valores_acf[lag]))
+    acf52_significativo = abs(valores_acf[52]) > banda_acf
+    diagnostico_correlograma: dict[str, object] = {
+        "acf_niveis_lag60": f"{valores_acf_niveis[60]:.3f}",
+        "acf_lag52": f"{valores_acf[52]:.3f}",
+        "acf_lag52_sig": "sim" if acf52_significativo else "não",
+        "acf_lag52_leitura": (
+            f"um pico marginal, logo acima da banda de ±{banda_acf:.3f}"
+            if acf52_significativo
+            else f"um valor dentro da banda de ±{banda_acf:.3f}"
+        ),
+        "acf_banda": f"{banda_acf:.3f}",
+        "acf_pico_lag": lag_pico,
+        "acf_pico_valor": f"{valores_acf[lag_pico]:.3f}",
+        "acf_n_lags_sig": len(lags_significativos),
+        "acf_lags_sig_txt": ", ".join(str(lag) for lag in lags_significativos[:12]),
+    }
 
     # Painel (a): FAC da série em níveis
     plot_acf(
@@ -218,11 +244,12 @@ def criar_correlogramas_fac_facp(train: pd.DataFrame) -> None:
         ax=axes[1, 0],
         lags=60,
         alpha=0.05,
-        title=r"(c) FAC — Série em Primeiras Diferenças $\nabla Y_t$ (Queda e picos sazonais)",
+        title=r"(c) FAC — Série em Primeiras Diferenças $\nabla Y_t$ (Pico negativo inicial; sem corte abrupto)",
     )
     axes[1, 0].set_xlabel("Desfasamento (Lags)")
     axes[1, 0].set_ylabel("Autocorrelação")
-    axes[1, 0].axvline(52, color="crimson", linestyle=":", lw=1.2, label="Lag Sazonal (s=52)")
+    referencia_lag52 = f"Lag 52 (referência anual; FAC = {valores_acf[52]:.3f})"
+    axes[1, 0].axvline(52, color="crimson", linestyle=":", lw=1.2, label=referencia_lag52)
     axes[1, 0].legend(loc="upper right")
 
     # Painel (d): FACP da série estacionarizada (d=1)
@@ -236,11 +263,13 @@ def criar_correlogramas_fac_facp(train: pd.DataFrame) -> None:
     )
     axes[1, 1].set_xlabel("Desfasamento (Lags)")
     axes[1, 1].set_ylabel("Autocorrelação Parcial")
-    axes[1, 1].axvline(52, color="crimson", linestyle=":", lw=1.2, label="Lag Sazonal (s=52)")
+    axes[1, 1].axvline(52, color="crimson", linestyle=":", lw=1.2, label=referencia_lag52)
     axes[1, 1].legend(loc="upper right")
 
     plt.tight_layout()
     guardar_figura(fig, "fig_03_fac_facp")
+
+    return diagnostico_correlograma
 
 
 # Modelação de Alisamento Exponencial (Holt e Holt-Winters) — Aulas #1
@@ -741,7 +770,7 @@ def consolidar_comparacao_econometrica(
 
 
 # Projeção Futura com Holt-Winters Reajustado (class-code/2.py, Slides 27, 30, 33c)
-def projetar_futuro_holt_winters(df: pd.DataFrame, modelos_exp: dict, horizonte: int = 52) -> None:
+def projetar_futuro_holt_winters(df: pd.DataFrame, modelos_exp: dict, horizonte: int = 52) -> pd.DataFrame:
     """Aplica o procedimento metodológico ensinado em class-code/2.py e no Slide 30 / 33c:
 
     Reajusta o modelo Holt-Winters com as constantes ótimas da amostra de treino
@@ -833,6 +862,8 @@ def projetar_futuro_holt_winters(df: pd.DataFrame, modelos_exp: dict, horizonte:
     plt.tight_layout()
     guardar_figura(fig, "fig_05b_previsao_futura_holtwinters")
 
+    return df_futuro
+
 
 # Síntese Interpretativa para o Relatório (ECONOMETRICS_SUMMARY.md)
 def exportar_resumo_econometria(
@@ -841,6 +872,8 @@ def exportar_resumo_econometria(
     df_params: pd.DataFrame,
     lb_teste: pd.DataFrame,
     jb_pval: float,
+    df_futuro: pd.DataFrame,
+    corr_diag: dict[str, object],
 ) -> None:
     """Gera um documento Markdown com o resumo interpretativo completo em Português de Portugal
 
@@ -850,6 +883,7 @@ def exportar_resumo_econometria(
 
     melhor_modelo_row = df_comp.iloc[0]
     holt_row = df_comp[df_comp["Modelo"].str.contains("Holt-Winters Multiplicativo", regex=False)].iloc[0]
+    hw_aditivo_row = df_comp[df_comp["Modelo"].str.contains("Holt-Winters Aditivo", regex=False)].iloc[0]
     arima_row = df_comp[df_comp["Modelo"].str.contains("ARIMA(0, 1, 2) Univariado", regex=False)].iloc[0]
 
     # Formatar coeficientes das covariáveis
@@ -857,6 +891,56 @@ def exportar_resumo_econometria(
     pval_autores = df_params.loc[df_params["Parâmetro"] == "unique_authors", "p-value (P > |z|)"].values[0]
     coef_churn = float(df_params.loc[df_params["Parâmetro"] == "log_churn", "Coeficiente"].values[0])
     pval_churn = df_params.loc[df_params["Parâmetro"] == "log_churn", "p-value (P > |z|)"].values[0]
+
+    # O modelo está em primeiras diferenças, pelo que o coeficiente de log_churn
+    # incide sobre d(log churn): +1% de churn vale coef_churn * ln(1.01).
+    efeito_churn_1pct = coef_churn * np.log(1.01)
+
+    # Holt-Winters: a forma multiplicativa é a mais defensável em teoria (a amplitude
+    # sazonal cresce com o nível), mas quem decide é o erro fora da amostra.
+    vencedor_hw = "aditiva" if float(hw_aditivo_row["REQM"]) < float(holt_row["REQM"]) else "multiplicativa"
+    hw_comparacao = (
+        "em teoria a forma multiplicativa é a mais adequada, porque a amplitude sazonal cresce com o nível da série. "
+        f"Na amostra de teste, porém, o REQM foi {hw_aditivo_row['REQM']} no aditivo e {holt_row['REQM']} no "
+        f"multiplicativo (AIC de {hw_aditivo_row['AIC']} e {holt_row['AIC']}, respetivamente), pelo que o desempenho "
+        f"fora da amostra favorece a forma {vencedor_hw}. A projeção da Secção 6 usa o multiplicativo por ser o "
+        "procedimento demonstrado em `class-code/2.py`, e não por superioridade preditiva"
+    )
+
+    # Ljung-Box: declarar quais os desfasamentos que rejeitam $H_0$, e não apenas os
+    # que a aceitam. A síntese anterior citava só os lags 1 e 10 e concluía ruído
+    # branco, quando os lags 15 e 20 rejeitam a 5%.
+    lags_ok = [int(lag) for lag in lb_teste.index if float(lb_teste.loc[lag, "lb_pvalue"]) > 0.05]
+    lags_rejeitam = [int(lag) for lag in lb_teste.index if float(lb_teste.loc[lag, "lb_pvalue"]) <= 0.05]
+
+    def listar_lags(valores: list[int]) -> str:
+        if not valores:
+            return "nenhum"
+        if len(valores) == 1:
+            return str(valores[0])
+        return ", ".join(str(v) for v in valores[:-1]) + " e " + str(valores[-1])
+
+    def formatar_pvalor(valor: object) -> str:
+        """Converte o p-value da tabela num texto legível ('< 0.0001' em vez de '0.0000e+00')."""
+        try:
+            numero = float(str(valor))
+        except ValueError:
+            return str(valor)
+        return "< 0.0001" if numero < 0.0001 else f"= {numero:.4f}"
+
+    if lags_rejeitam:
+        lb_leitura = (
+            f"Os resíduos não podem ser declarados ruído branco: a autocorrelação reaparece a partir do "
+            f"desfasamento {min(lags_rejeitam)}, compatível com o ciclo de release (~10 semanas), que um modelo "
+            "linear com $s = 52$ não captura. É uma limitação a declarar no relatório."
+        )
+    else:
+        lb_leitura = "Os resíduos são compatíveis com ruído branco em toda a extensão testada."
+
+    # Extremos da projeção: os valores citados na síntese têm de sair da tabela e não
+    # de uma estimativa à vista sobre o nível médio.
+    idx_prev_min = df_futuro["Previsao_Commits"].idxmin()
+    idx_prev_max = df_futuro["Previsao_Commits"].idxmax()
 
     contexto: dict[str, object] = {
         "adf_stat_niveis": df_adf.loc[df_adf["Série"] == "Série em Níveis Y_t", "Estatística ADF"].values[0],
@@ -867,9 +951,13 @@ def exportar_resumo_econometria(
         "adf_pval_simples": df_adf.loc[df_adf["Série"] == "Primeira Diferença Simples", "p-value"].values[0],
         "holt_linear_reqm": df_comp.loc[df_comp["Modelo"] == "Holt Linear", "REQM"].values[0],
         "holt_linear_epam": df_comp.loc[df_comp["Modelo"] == "Holt Linear", "EPAM (%)"].values[0],
+        "hw_adit_reqm": hw_aditivo_row["REQM"],
+        "hw_adit_epam": hw_aditivo_row["EPAM (%)"],
+        "hw_adit_aic": hw_aditivo_row["AIC"],
         "holt_mult_reqm": holt_row["REQM"],
         "holt_mult_epam": holt_row["EPAM (%)"],
         "holt_mult_aic": holt_row["AIC"],
+        "hw_comparacao": hw_comparacao,
         "arima_reqm": arima_row["REQM"],
         "arima_epam": arima_row["EPAM (%)"],
         "arima_aic": arima_row["AIC"],
@@ -880,15 +968,26 @@ def exportar_resumo_econometria(
         "ganho_reqm_pct": f"{((arima_row['REQM'] - melhor_modelo_row['REQM']) / arima_row['REQM']) * 100:.1f}",
         "coef_autores": coef_autores,
         "coef_autores_fmt": f"{coef_autores:.1f}",
-        "pval_autores": pval_autores,
+        "pval_autores": formatar_pvalor(pval_autores),
         "coef_churn": coef_churn,
-        "pval_churn": pval_churn,
-        "lb_lag1_stat": f"{lb_teste.loc[1, 'lb_stat']:.2f}",
-        "lb_lag1_pval": f"{lb_teste.loc[1, 'lb_pvalue']:.4f}",
-        "lb_lag10_stat": f"{lb_teste.loc[10, 'lb_stat']:.2f}",
-        "lb_lag10_pval": f"{lb_teste.loc[10, 'lb_pvalue']:.4f}",
-        "jb_pval": f"{jb_pval:.2e}",
+        "pval_churn": formatar_pvalor(pval_churn),
+        "efeito_churn_1pct": f"{efeito_churn_1pct:.1f}",
+        "lb_ok_txt": listar_lags(lags_ok),
+        "lb_rejeita_txt": listar_lags(lags_rejeitam),
+        "lb_leitura": lb_leitura,
+        "jb_pval": ("< 0.0001" if jb_pval < 0.0001 else f"= {jb_pval:.4f}"),
+        "prev_min": f"{df_futuro.loc[idx_prev_min, 'Previsao_Commits']:,.0f}".replace(",", "."),
+        "prev_max": f"{df_futuro.loc[idx_prev_max, 'Previsao_Commits']:,.0f}".replace(",", "."),
+        "prev_min_data": df_futuro.loc[idx_prev_min, "Data"],
+        "prev_max_data": df_futuro.loc[idx_prev_max, "Data"],
+        "prev_inicio": df_futuro["Data"].iloc[0],
+        "prev_fim": df_futuro["Data"].iloc[-1],
+        **corr_diag,
     }
+
+    for lag in (1, 5, 10, 15, 20):
+        contexto[f"lb_lag{lag}_stat"] = f"{lb_teste.loc[lag, 'lb_stat']:.2f}"
+        contexto[f"lb_lag{lag}_pval"] = f"{lb_teste.loc[lag, 'lb_pvalue']:.4f}"
 
     guardar_markdown_template("econometrics_summary.md", "ECONOMETRICS_SUMMARY.md", contexto)
 
@@ -897,13 +996,13 @@ def main():
     iniciar_script("02", "MODELAÇÃO ECONOMÉTRICA CLÁSSICA")
     df, train, test = carregar_dados_e_dividir()
     df_adf = executar_testes_adf(train)
-    criar_correlogramas_fac_facp(train)
+    corr_diag = criar_correlogramas_fac_facp(train)
     modelos_exp = modelar_alisamento_exponencial(train, test)
     modelos_bj, modelo_vencedor_info = modelar_arima_arimax(train, test)
     df_params, lb_teste, jb_pval = executar_diagnostico_residuos(modelo_vencedor_info)
     df_comp = consolidar_comparacao_econometrica(train, test, modelos_exp, modelos_bj)
-    projetar_futuro_holt_winters(df, modelos_exp, horizonte=52)
-    exportar_resumo_econometria(df_adf, df_comp, df_params, lb_teste, jb_pval)
+    df_futuro = projetar_futuro_holt_winters(df, modelos_exp, horizonte=52)
+    exportar_resumo_econometria(df_adf, df_comp, df_params, lb_teste, jb_pval, df_futuro, corr_diag)
     finalizar_script("02")
 
 

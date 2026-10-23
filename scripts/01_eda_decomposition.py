@@ -73,23 +73,28 @@ def carregar_dados() -> tuple[pd.DataFrame, pd.DataFrame]:
     return df_w, df_d
 
 
-# Matriz de Correlação entre Variáveis (fig_00 e tab_00)
+# Matrizes de Correlação entre Variáveis (fig_00_* e tab_00_*)
 def gerar_matriz_correlacao(df_w: pd.DataFrame) -> None:
-    """Gera a Figura 0 (Matriz de Correlação) e a Tabela 0 abrangendo todas as
+    """Gera as Matrizes de Correlação (Pearson e Spearman) e as Tabelas 0.
 
-    variáveis numéricas documentadas em dataset/dataset_fields_description.md:
-    - total_commits, non_merge_commits, merge_commits, unique_authors,
-      files_changed, insertions, deletions, total_churn, net_code_growth.
+    Abrange as nove variáveis de código documentadas em
+    dataset/dataset_fields_description.md (total_commits, non_merge_commits,
+    merge_commits, unique_authors, files_changed, insertions, deletions,
+    total_churn, net_code_growth) e as três variáveis quantitativas do ciclo de
+    release (weeks_since_release, is_merge_window, rc_week).
 
-    Compara:
-    (a) Correlação Linear de Pearson (s/ o outlier de importação inicial de 2005-04-18)
-    (b) Correlação de Ordem de Spearman (amostra completa, robusta a outliers)
-    E analisa a colinearidade com a variável dependente (total_commits) e entre
-    variáveis candidatas a exógenas.
+    `last_release_tag` e `last_release_date` ficam de fora por não serem medidas:
+    um identificador de tag e uma data correlacionam-se com tudo o que tem
+    tendência temporal, sem informar sobre a intensidade da atividade.
+
+    Pearson e Spearman são gravados em ficheiros separados porque a matriz passou
+    a 12x12 e dois painéis no mesmo ficheiro deixariam de ser legíveis impressos.
+    A amostra de Pearson exclui a semana inaugural de 2005 (import de 6.75M
+    linhas); a de Spearman usa a amostra completa, robusta a outliers.
     """
-    print("[*] A gerar Matriz de Correlação entre variáveis (fig_00 e tab_00)...")
+    print("[*] A gerar Matrizes de Correlação (fig_00_* e tab_00_*)...")
 
-    colunas = [
+    colunas_codigo = [
         "total_commits",
         "non_merge_commits",
         "merge_commits",
@@ -100,6 +105,8 @@ def gerar_matriz_correlacao(df_w: pd.DataFrame) -> None:
         "total_churn",
         "net_code_growth",
     ]
+    colunas_release = ["weeks_since_release", "is_merge_window", "rc_week"]
+    colunas = colunas_codigo + colunas_release
 
     rotulos_curtos = [
         "total_commits (Y_t)",
@@ -111,10 +118,17 @@ def gerar_matriz_correlacao(df_w: pd.DataFrame) -> None:
         "deletions",
         "total_churn",
         "net_code_growth",
+        "weeks_since_release",
+        "is_merge_window",
+        "rc_week",
     ]
 
     # 1. Cálculos de correlação
-    df_cols = df_w[colunas]
+    # As colunas do ciclo de release são Int64 nullable: converter para float para
+    # que os 10 NaN (semanas anteriores ao primeiro tag) contem como omissos e não
+    # como zero. O `corr` usa pares completos, pelo que as restantes linhas não se
+    # perdem.
+    df_cols = df_w[colunas].astype("float64")
     assert isinstance(df_cols, pd.DataFrame)
     corr_pearson_all = df_cols.corr(method="pearson")
     # Excluir a 1ª semana (import inicial de 6.75M linhas) para não distorcer linearmente o code churn
@@ -123,103 +137,127 @@ def gerar_matriz_correlacao(df_w: pd.DataFrame) -> None:
     corr_diff_clean = df_cols.iloc[1:].diff().dropna().corr(method="pearson")
     # Correlação de postos de Spearman (amostra total)
     corr_spearman = df_cols.corr(method="spearman")
+    n_semanas = len(df_cols)
+    n_com_release = int(df_cols[colunas_release].notna().all(axis=1).sum())
 
-    # Diagnóstico de colinearidade e adequação como variável exógena
+    # Diagnóstico qualitativo de colinearidade e adequação como variável exógena.
+    # Os coeficientes não se repetem no texto: estão nas colunas numéricas desta
+    # mesma tabela, onde são calculados, e um texto com números fixos desatualiza-se
+    # em silêncio (era o caso de files_changed, com d1=0.762 escrito à mão contra
+    # 0.761 calculado).
     diagnosticos = {
         "total_commits": "Variavel Dependente / Alvo (Y_t)",
-        "non_merge_commits": "Identidade Contabilistica (r=0.998 com Y_t) — Excluir das exogenas",
-        "merge_commits": "Componente direta da soma de Y_t (r=0.653) — Evitar por endogeneidade",
-        "unique_authors": "Correlacao muito elevada com Y_t (r=0.934, d1=0.898) — Risco de simultaneidade",
-        "files_changed": "Correlacao elevada com Y_t (r=0.823, d1=0.762) — Proxy de escopo arquitetural",
-        "insertions": "Correlacao moderada com Y_t (r=0.560) mas colinear com total_churn (r=0.939)",
-        "deletions": "Correlacao moderada com Y_t (r=0.431) — Indicador de refatoracao/limpeza",
-        "total_churn": "Correlacao moderada com Y_t (r=0.587, d1=0.549) — Excelente exogena ortogonal",
-        "net_code_growth": "Correlacao baixa/moderada com Y_t (r=0.379, d1=0.284) — Informacao complementar",
+        "non_merge_commits": "Identidade Contabilistica com Y_t — Excluir das exogenas",
+        "merge_commits": "Componente direta da soma de Y_t — Evitar por endogeneidade",
+        "unique_authors": "Correlacao muito elevada com Y_t — Risco de simultaneidade",
+        "files_changed": "Correlacao elevada com Y_t — Proxy de escopo arquitetural",
+        "insertions": "Correlacao moderada com Y_t mas colinear com total_churn",
+        "deletions": "Correlacao moderada com Y_t — Indicador de refatoracao/limpeza",
+        "total_churn": "Correlacao moderada com Y_t — Excelente exogena ortogonal",
+        "net_code_growth": "Correlacao baixa/moderada com Y_t — Informacao complementar",
+        "weeks_since_release": (
+            "Contador do ciclo (0-15 semanas): relacao nao linear e sinal que inverte em 2015. "
+            "Nao usar como regressor linear unico; codificar por fase (ver tab_02_outliers.csv)"
+        ),
+        "is_merge_window": (
+            "Dummy (semanas 0-1), identica a weeks_since_release < 2: a correlacao linear agrupada "
+            "e nula porque o efeito muda de sinal em 2015"
+        ),
+        "rc_week": (
+            "Redundante com weeks_since_release (rc_week = max(0, weeks-1) em todas as linhas): "
+            "escolher uma das duas codificacoes, nunca ambas"
+        ),
     }
 
-    registos_corr = []
+    registos_pearson = []
     for col in colunas:
         linha = {
             "Variavel": col,
             "r_Pearson_com_Yt_Sem_Outlier2005": round(corr_pearson_clean.loc[col, "total_commits"], 3),
             "r_Pearson_com_Yt_Primeiras_Diferencas": round(corr_diff_clean.loc[col, "total_commits"], 3),
-            "rho_Spearman_com_Yt": round(corr_spearman.loc[col, "total_commits"], 3),
             "r_Pearson_com_Yt_Bruto_Com_2005": round(corr_pearson_all.loc[col, "total_commits"], 3),
             "Avaliacao_Como_Exogena": diagnosticos[col],
         }
         for col_dest in colunas:
             linha[f"corr_{col_dest}"] = round(corr_pearson_clean.loc[col, col_dest], 3)
-        registos_corr.append(linha)
+        registos_pearson.append(linha)
 
-    df_tab0 = pd.DataFrame(registos_corr)
-    guardar_tabela(df_tab0, "tab_00_matriz_correlacao", "Tabela de correlações")
-
-    # 2. Construção da Figura 0 (Painel duplo: Pearson s/ outlier 2005 vs. Spearman)
-    fig, axes = plt.subplots(1, 2, figsize=(16, 7.5))
-    fig.suptitle(
-        "Figura 0: Matriz de Correlação entre Todas as Variáveis do Dataset (2005–2026)\n"
-        "Investigação de Colinearidade, Identidades Contabilísticas e Seleção de Variáveis Exógenas\n"
-        "ISEG — Time Series Forecasting — Análise Preliminar de Variáveis (dataset_fields_description.md)",
-        fontsize=12,
-        fontweight="bold",
-        y=1.01,
+    guardar_tabela(
+        pd.DataFrame(registos_pearson),
+        "tab_00_matriz_correlacao_pearson",
+        "Tabela de correlações de Pearson",
     )
 
-    # Máscara opcional ou matriz completa anotada (matriz completa facilita leitura cruzada)
-    # Painel (a): Pearson s/ commit inaugural de 2005
-    sns.heatmap(
-        corr_pearson_clean.values,
-        ax=axes[0],
-        cmap="RdBu_r",
-        vmin=-0.2,
-        vmax=1.0,
-        center=0.4,
-        annot=True,
-        fmt=".2f",
-        annot_kws={"size": 8.5, "weight": "bold"},
-        xticklabels=rotulos_curtos,
-        yticklabels=rotulos_curtos,
-        cbar_kws={"label": "Coeficiente de Correlação de Pearson (r)", "shrink": 0.82},
-        linewidths=0.6,
-        linecolor="white",
-    )
-    axes[0].set_title(
-        "(a) Correlação Linear de Pearson (r)\n(Regime normal de operação, s/ outlier inaugural de 2005-04-18)",
-        loc="left",
-        fontweight="bold",
-        fontsize=10.5,
-    )
-    axes[0].tick_params(axis="x", rotation=35)
-    axes[0].tick_params(axis="y", rotation=0)
+    registos_spearman = []
+    for col in colunas:
+        linha = {"Variavel": col, "rho_Spearman_com_Yt": round(corr_spearman.loc[col, "total_commits"], 3)}
+        for col_dest in colunas:
+            linha[f"rho_{col_dest}"] = round(corr_spearman.loc[col, col_dest], 3)
+        registos_spearman.append(linha)
 
-    # Painel (b): Spearman (Ordem / Postos)
-    sns.heatmap(
-        corr_spearman.values,
-        ax=axes[1],
-        cmap="RdBu_r",
-        vmin=-0.2,
-        vmax=1.0,
-        center=0.4,
-        annot=True,
-        fmt=".2f",
-        annot_kws={"size": 8.5, "weight": "bold"},
-        xticklabels=rotulos_curtos,
-        yticklabels=rotulos_curtos,
-        cbar_kws={"label": r"Coeficiente de Correlação de Spearman ($\rho$)", "shrink": 0.82},
-        linewidths=0.6,
-        linecolor="white",
+    guardar_tabela(
+        pd.DataFrame(registos_spearman),
+        "tab_00_matriz_correlacao_spearman",
+        "Tabela de correlações de Spearman",
     )
-    axes[1].set_title(
-        r"(b) Correlação de Postos de Spearman ($\rho$)" + "\n(Amostra completa N=1117 semanas, robusta a outliers)",
-        loc="left",
-        fontweight="bold",
-        fontsize=10.5,
-    )
-    axes[1].tick_params(axis="x", rotation=35)
-    axes[1].tick_params(axis="y", rotation=0)
 
-    plt.tight_layout()
-    guardar_figura(fig, "fig_00_matriz_correlacao")
+    # 2. Construção das duas Figuras 0 (Pearson e Spearman em ficheiros separados)
+    def desenhar_matriz(
+        matriz: pd.DataFrame,
+        titulo: str,
+        subtitulo: str,
+        rotulo_barra: str,
+        nome_ficheiro: str,
+    ) -> None:
+        """Desenha uma matriz 12x12 anotada, com o bloco do ciclo de release delimitado."""
+        fig, ax = plt.subplots(figsize=(13, 11))
+        fig.suptitle(
+            f"{titulo}\n"
+            "Investigação de Colinearidade, Identidades Contabilísticas e Seleção de Variáveis Exógenas\n"
+            "ISEG — Time Series Forecasting — Análise Preliminar de Variáveis (dataset_fields_description.md)",
+            fontsize=12,
+            fontweight="bold",
+            y=0.98,
+        )
+        sns.heatmap(
+            matriz.values,
+            ax=ax,
+            cmap="RdBu_r",
+            vmin=-0.2,
+            vmax=1.0,
+            center=0.4,
+            annot=True,
+            fmt=".2f",
+            annot_kws={"size": 8},
+            xticklabels=rotulos_curtos,
+            yticklabels=rotulos_curtos,
+            cbar_kws={"label": rotulo_barra, "shrink": 0.8},
+            linewidths=0.6,
+            linecolor="white",
+        )
+        # Delimitar o bloco do ciclo de release (últimas três linhas e colunas)
+        ax.axhline(len(colunas_codigo), color="black", lw=1.4)
+        ax.axvline(len(colunas_codigo), color="black", lw=1.4)
+        ax.set_title(subtitulo, loc="left", fontweight="bold", fontsize=10.5)
+        ax.tick_params(axis="x", rotation=40)
+        ax.tick_params(axis="y", rotation=0)
+        plt.tight_layout(rect=(0, 0, 1, 0.93))
+        guardar_figura(fig, nome_ficheiro)
+
+    desenhar_matriz(
+        corr_pearson_clean,
+        "Figura 0a: Matriz de Correlação Linear de Pearson (r)",
+        f"Regime normal de operação, sem o outlier inaugural de 2005-04-18 (N={n_semanas - 1} semanas)",
+        "Coeficiente de Correlação de Pearson (r)",
+        "fig_00_matriz_correlacao_pearson",
+    )
+    desenhar_matriz(
+        corr_spearman,
+        "Figura 0b: Matriz de Correlação de Postos de Spearman",
+        f"Amostra completa (N={n_semanas} semanas, {n_com_release} com release de referência), robusta a outliers",
+        r"Coeficiente de Correlação de Spearman ($\rho$)",
+        "fig_00_matriz_correlacao_spearman",
+    )
 
 
 # Geração da Tabela de Estatísticas Descritivas (tab_01_variaveis.csv)
@@ -424,6 +462,39 @@ def criar_cronogramas(df_w: pd.DataFrame, df_d: pd.DataFrame) -> None:
 
 
 # Decomposição Aditiva e Multiplicativa (s=52) e Deteção de Outliers
+FASE_MERGE = "Merge window (semanas 0-1)"
+FASE_RC_INICIAL = "Estabilização inicial (rc1-rc5)"
+FASE_RC_FINAL = "Estabilização final (rc6+)"
+FASE_SEM_RELEASE = "Sem release de referência"
+
+
+def classificar_fase_release(semanas: float | None, positivo: bool) -> tuple[str, str]:
+    """Traduz a posição no ciclo de release em fase e contexto de engenharia.
+
+    A fase é lida do calendário de releases (``weeks_since_release``) e não do mês
+    do calendário. O mês não determina nada: a mesma semana de maio pode estar na
+    merge window de um ciclo e na estabilização final do ciclo seguinte, pelo que
+    uma heurística baseada no mês classifica corretamente por acidente, quando o faz.
+    """
+    if pd.isna(semanas):
+        return FASE_SEM_RELEASE, "Sem release de referência (início da série)"
+
+    if semanas <= 1:
+        fase = FASE_MERGE
+        pico = "Pico na merge window (integração de subsistemas)"
+        queda = "Queda na merge window (mainline congelada para integração)"
+    elif semanas <= 5:
+        fase = FASE_RC_INICIAL
+        pico = "Pico na fase inicial de estabilização (rc1-rc5)"
+        queda = "Queda na fase inicial de estabilização (rc1-rc5)"
+    else:
+        fase = FASE_RC_FINAL
+        pico = "Pico na fase final de estabilização (imediata ao release)"
+        queda = "Queda na fase final de estabilização (apenas correções)"
+
+    return fase, pico if positivo else queda
+
+
 def executar_decomposicoes_e_outliers(
     df_w: pd.DataFrame,
 ) -> tuple[pd.DataFrame, dict]:
@@ -462,23 +533,12 @@ def executar_decomposicoes_e_outliers(
         z_score = (r - media_resid) / desvio_resid
 
         # Classificação e Contexto Provável de Engenharia
-        mes = d.month
-        dia = d.day
+        positivo = z_score > 0
+        tipo = "Pico Anómalo Positivo (+)" if positivo else "Queda Anómala Negativa (-)"
 
-        if z_score > 0:
-            tipo = "Pico Anómalo Positivo (+)"
-            if mes in [1, 2, 5, 8, 10]:
-                contexto = "Merge window (rc1 do kernel)"
-            else:
-                contexto = "Pico de commits / Integração de subsistema"
-        else:
-            tipo = "Queda Anómala Negativa (-)"
-            if mes == 12 or (mes == 1 and dia <= 10):
-                contexto = "Pausa Festiva (Natal e Passagem de Ano)"
-            elif mes in [7, 8]:
-                contexto = "Pausa Estival / Férias de Verão dos Maintainers"
-            else:
-                contexto = "Fase tardia de estabilização (apenas bugfixes rc7/rc8)"
+        # A fase vem do calendário de releases; o mês do calendário não a determina.
+        semanas = df_w.at[d, "weeks_since_release"] if "weeks_since_release" in df_w.columns else None
+        fase, contexto = classificar_fase_release(semanas, positivo)
 
         registos_outliers.append({
             "Data": d.strftime("%Y-%m-%d"),
@@ -489,11 +549,14 @@ def executar_decomposicoes_e_outliers(
             "Fator Sazonal (S_t)": round(sazon, 1),
             "Resíduo (R_t)": round(r, 2),
             "Z-Score (|Z| > 2)": round(z_score, 2),
+            "Semanas Desde Release": semanas,
+            "Fase do Ciclo de Release": fase,
             "Classificação": tipo,
             "Contexto de Engenharia Provável": contexto,
         })
 
     df_outliers = pd.DataFrame(registos_outliers).sort_values(by="Data", ascending=True)
+    df_outliers["Semanas Desde Release"] = df_outliers["Semanas Desde Release"].astype("Int64")
     print(f"    -> Deteção de outliers concluída: {len(df_outliers)} semanas identificadas (|Z| > 2).")
     guardar_tabela(df_outliers, "tab_02_outliers")
 
@@ -670,6 +733,12 @@ def executar_decomposicoes_e_outliers(
     guardar_figura(fig, "fig_02_decomposicao_adit_mult")
 
     # Estatísticas de diagnóstico da decomposição
+    # Semana do calendário em que o fator sazonal atinge os extremos: o mês não
+    # identifica a fase do ciclo, mas a sazonalidade anual é de facto indexada
+    # pela semana do ano.
+    sazonal = decomp_mult.seasonal.dropna()
+    fator_por_semana = sazonal.groupby(sazonal.index.isocalendar().week).mean()
+
     metricas_decomp = {
         "N_observacoes": len(df_w),
         "Media_Serie": round(serie.mean(), 2),
@@ -684,6 +753,8 @@ def executar_decomposicoes_e_outliers(
         "Pct_Outliers_Adit": round((len(df_outliers) / len(resid_adit)) * 100, 2),
         "Min_Fator_Sazonal_Mult": round(decomp_mult.seasonal.min(), 3),
         "Max_Fator_Sazonal_Mult": round(decomp_mult.seasonal.max(), 3),
+        "Semana_Min_Fator_Mult": int(fator_por_semana.idxmin()),
+        "Semana_Max_Fator_Mult": int(fator_por_semana.idxmax()),
     }
 
     return df_outliers, metricas_decomp
@@ -700,15 +771,38 @@ def exportar_resumo_eda(metricas: dict, df_outliers: pd.DataFrame) -> None:
     picos_pos = df_outliers[df_outliers["Classificação"].str.contains("Positivo")]
     quedas_neg = df_outliers[df_outliers["Classificação"].str.contains("Negativa")]
 
+    # Distribuição dos extremos pelas fases do ciclo de release, separada por regime.
+    # A merge window inverte o sinal em 2015: na amostra completa os picos positivos
+    # parecem concentrar-se nela, mas todos esses casos são anteriores a 2015. Uma
+    # contagem agregada esconde dois processos distintos e não pode ser citada sozinha.
+    fase_pos = picos_pos["Fase do Ciclo de Release"]
+    fase_neg = quedas_neg["Fase do Ciclo de Release"]
+    pos_antigo = picos_pos["Ano"] < 2015
+    neg_antigo = quedas_neg["Ano"] < 2015
+
     contexto: dict[str, object] = {
         "n_observacoes": metricas["N_observacoes"],
         "min_fator_sazonal_mult": f"{metricas['Min_Fator_Sazonal_Mult'] * 100:.1f}",
         "max_fator_sazonal_mult": f"{metricas['Max_Fator_Sazonal_Mult'] * 100:.1f}",
+        "semana_min_fator": metricas["Semana_Min_Fator_Mult"],
+        "semana_max_fator": metricas["Semana_Max_Fator_Mult"],
         "resid_adit_std": metricas["Resid_Adit_Std"],
         "n_outliers_adit": metricas["N_Outliers_Adit"],
         "pct_outliers_adit": metricas["Pct_Outliers_Adit"],
         "n_picos_pos": len(picos_pos),
         "n_quedas_neg": len(quedas_neg),
+        "picos_pos_merge": int((fase_pos == FASE_MERGE).sum()),
+        "picos_pos_inicial": int((fase_pos == FASE_RC_INICIAL).sum()),
+        "picos_pos_final": int((fase_pos == FASE_RC_FINAL).sum()),
+        "picos_pos_merge_ant": int(((fase_pos == FASE_MERGE) & pos_antigo).sum()),
+        "picos_pos_merge_dep": int(((fase_pos == FASE_MERGE) & ~pos_antigo).sum()),
+        "picos_pos_final_ant": int(((fase_pos == FASE_RC_FINAL) & pos_antigo).sum()),
+        "picos_pos_final_dep": int(((fase_pos == FASE_RC_FINAL) & ~pos_antigo).sum()),
+        "quedas_merge": int((fase_neg == FASE_MERGE).sum()),
+        "quedas_inicial": int((fase_neg == FASE_RC_INICIAL).sum()),
+        "quedas_final": int((fase_neg == FASE_RC_FINAL).sum()),
+        "quedas_ant": int(neg_antigo.sum()),
+        "quedas_dep": int((~neg_antigo).sum()),
     }
 
     guardar_markdown_template("eda_summary.md", "EDA_SUMMARY.md", contexto)

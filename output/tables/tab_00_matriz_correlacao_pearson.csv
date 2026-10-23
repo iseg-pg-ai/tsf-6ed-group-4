@@ -1,0 +1,13 @@
+Variavel,r_Pearson_com_Yt_Sem_Outlier2005,r_Pearson_com_Yt_Primeiras_Diferencas,r_Pearson_com_Yt_Bruto_Com_2005,Avaliacao_Como_Exogena,corr_total_commits,corr_non_merge_commits,corr_merge_commits,corr_unique_authors,corr_files_changed,corr_insertions,corr_deletions,corr_total_churn,corr_net_code_growth,corr_weeks_since_release,corr_is_merge_window,corr_rc_week
+total_commits,1.0,1.0,1.0,Variavel Dependente / Alvo (Y_t),1.0,0.998,0.653,0.934,0.823,0.56,0.431,0.587,0.379,0.111,-0.114,0.113
+non_merge_commits,0.998,0.997,0.998,Identidade Contabilistica com Y_t — Excluir das exogenas,0.998,1.0,0.604,0.926,0.829,0.566,0.44,0.595,0.381,0.119,-0.136,0.118
+merge_commits,0.653,0.324,0.654,Componente direta da soma de Y_t — Evitar por endogeneidade,0.653,0.604,1.0,0.683,0.446,0.28,0.162,0.273,0.222,-0.021,0.182,0.01
+unique_authors,0.934,0.898,0.934,Correlacao muito elevada com Y_t — Risco de simultaneidade,0.934,0.926,0.683,1.0,0.71,0.441,0.313,0.452,0.314,0.046,-0.136,0.04
+files_changed,0.823,0.761,0.778,Correlacao elevada com Y_t — Proxy de escopo arquitetural,0.823,0.829,0.446,0.71,1.0,0.603,0.538,0.662,0.363,0.071,-0.024,0.074
+insertions,0.56,0.489,0.123,Correlacao moderada com Y_t mas colinear com total_churn,0.56,0.566,0.28,0.441,0.603,1.0,0.492,0.939,0.846,0.067,0.017,0.074
+deletions,0.431,0.442,0.431,Correlacao moderada com Y_t — Indicador de refatoracao/limpeza,0.431,0.44,0.162,0.313,0.538,0.492,1.0,0.762,-0.048,0.019,0.029,0.026
+total_churn,0.587,0.548,0.187,Correlacao moderada com Y_t — Excelente exogena ortogonal,0.587,0.595,0.273,0.452,0.662,0.939,0.762,1.0,0.61,0.057,0.024,0.065
+net_code_growth,0.379,0.283,0.053,Correlacao baixa/moderada com Y_t — Informacao complementar,0.379,0.381,0.222,0.314,0.363,0.846,-0.048,0.61,1.0,0.065,0.002,0.069
+weeks_since_release,0.111,0.179,0.111,Contador do ciclo (0-15 semanas): relacao nao linear e sinal que inverte em 2015. Nao usar como regressor linear unico; codificar por fase (ver tab_02_outliers.csv),0.111,0.119,-0.021,0.046,0.071,0.067,0.019,0.057,0.065,1.0,-0.674,0.996
+is_merge_window,-0.114,-0.15,-0.114,"Dummy (semanas 0-1), identica a weeks_since_release < 2: a correlacao linear agrupada e nula porque o efeito muda de sinal em 2015",-0.114,-0.136,0.182,-0.136,-0.024,0.017,0.029,0.024,0.002,-0.674,1.0,-0.637
+rc_week,0.113,0.186,0.113,"Redundante com weeks_since_release (rc_week = max(0, weeks-1) em todas as linhas): escolher uma das duas codificacoes, nunca ambas",0.113,0.118,0.01,0.04,0.074,0.074,0.026,0.065,0.069,0.996,-0.637,1.0
