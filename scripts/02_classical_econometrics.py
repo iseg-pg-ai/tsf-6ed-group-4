@@ -38,6 +38,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import statsmodels.api as sm
 from scipy import stats
 from statsmodels.graphics.gofplots import qqplot
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
@@ -515,14 +516,54 @@ def modelar_arima_arimax(
 
 
 # Diagnóstico dos Resíduos e Tabela Formal SARIMAX — Slides 55, 56, 70
+def comparar_leitura_coeficientes(train: pd.DataFrame, var_names: list[str]) -> dict[str, str]:
+    """Verifica empiricamente sobre que grandeza os coeficientes do ARIMAX são estimados.
+
+    Numa regressão com erros ARIMA em primeiras diferenças, os coeficientes são
+    identificados pela co-movimentação das variações. Se incidissem sobre o nível,
+    coincidiriam com os de uma regressão OLS em níveis; incidindo sobre a variação,
+    coincidem com os de uma regressão OLS em primeiras diferenças. A síntese cita as
+    duas estimativas para sustentar a leitura de curto prazo em vez de a afirmar.
+    """
+    if not {"unique_authors", "log_churn"} <= set(var_names):
+        return {
+            "ols_niveis_autores": "n/d",
+            "ols_dif_autores": "n/d",
+            "ols_niveis_churn": "n/d",
+            "ols_dif_churn": "n/d",
+        }
+
+    amostra = train.dropna(subset=["fase_rc_inicial"])
+    y_niveis = amostra["total_commits"].astype(float)
+    x_niveis = amostra[var_names].astype(float)
+
+    ols_niveis = sm.OLS(y_niveis, sm.add_constant(x_niveis)).fit()
+
+    dif = amostra[["total_commits", *var_names]].astype(float).diff().dropna()
+    ols_dif = sm.OLS(dif["total_commits"], sm.add_constant(dif[var_names])).fit()
+
+    def fmt(valor: float) -> str:
+        return f"{valor:.2f}".replace(".", ",")
+
+    return {
+        "ols_niveis_autores": fmt(float(ols_niveis.params["unique_authors"])),
+        "ols_dif_autores": fmt(float(ols_dif.params["unique_authors"])),
+        "ols_niveis_churn": fmt(float(ols_niveis.params["log_churn"])),
+        "ols_dif_churn": fmt(float(ols_dif.params["log_churn"])),
+    }
+
+
 def executar_diagnostico_residuos(
     modelo_vencedor_info: tuple[str, SARIMAXResultsWrapper, list[str] | None],
-) -> tuple[pd.DataFrame, pd.DataFrame, float]:
+    train: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, object]]:
     """Gera a tabela formal de estimação (tab_04_sarimax_results.csv) e o painel quádruplo
 
     de diagnóstico de resíduos para validação de ruído branco (Ljung-Box e Jarque-Bera).
+    Devolve também as estatísticas descritivas dos resíduos, para que a síntese escrita
+    cite a assimetria e a curtose em vez de qualificar as caudas à vista.
     """
-    rotulo, res, _var_names = modelo_vencedor_info
+    rotulo, res, var_names = modelo_vencedor_info
     print(f"[*] A executar diagnóstico de resíduos para o modelo eleito: {rotulo}...")
 
     # 1. Extração da Tabela Formal de Parâmetros (Slide 56 e 70)
@@ -548,22 +589,55 @@ def executar_diagnostico_residuos(
     df_params = pd.DataFrame(linhas_tabela)
     guardar_tabela(df_params, "tab_04_sarimax_results", "Tabela de coeficientes")
 
+    # 1b. Verificação da leitura dos coeficientes: OLS em níveis vs. OLS em diferenças
+    ols_diag = comparar_leitura_coeficientes(train, var_names or [])
+
     # 2. Testes Formais nos Resíduos: Ljung-Box (Slide 55) e Jarque-Bera
-    resid = res.resid
+    # A primeira observação é descartada. O modelo é estimado na forma de espaço de
+    # estados e o filtro de Kalman arranca com inicialização difusa, pelo que o primeiro
+    # resíduo absorve a incerteza inicial (-1.291 commits, ~8 desvios-padrão) e não um
+    # choque da série. Mantê-lo inflaciona o Jarque-Bera (5.709 contra 3.913) e não é
+    # prática defensável num teste de normalidade.
+    resid_bruto = res.resid
+    resid = resid_bruto.iloc[1:]
     std_resid = (resid - resid.mean()) / resid.std()
 
     lb_teste = acorr_ljungbox(resid, lags=[1, 5, 10, 15, 20], return_df=True)
     jb_stat, jb_pval = cast(tuple[float, float], stats.jarque_bera(resid))
+    jb_stat_bruto, jb_pval_bruto = cast(tuple[float, float], stats.jarque_bera(resid_bruto))
+    assimetria = float(stats.skew(resid))
+    curtose_excesso = float(stats.kurtosis(resid))
 
-    linhas_diag = []
-    jb_status = "Resíduos Normais (p > 0.05)" if jb_pval > 0.05 else "Rejeita Normalidade (p <= 0.05)"
-    linhas_diag.append({
-        "Teste": "Jarque-Bera (Normalidade)",
-        "Desfasamento": "Global",
-        "Estatística": round(jb_stat, 2),
-        "p-value": (f"{jb_pval:.4e}" if jb_pval < 0.0001 else f"{jb_pval:.4f}"),
-        "Diagnóstico": jb_status,
-    })
+    linhas_diag = [
+        {
+            "Teste": "Jarque-Bera (Normalidade)",
+            "Desfasamento": f"Global (n={len(resid)}, sem resíduo inicial)",
+            "Estatística": round(jb_stat, 2),
+            "p-value": (f"{jb_pval:.4e}" if jb_pval < 0.0001 else f"{jb_pval:.4f}"),
+            "Diagnóstico": "Resíduos Normais (p > 0.05)" if jb_pval > 0.05 else "Rejeita Normalidade (p <= 0.05)",
+        },
+        {
+            "Teste": "Jarque-Bera (Normalidade)",
+            "Desfasamento": f"Global (n={len(resid_bruto)}, com resíduo inicial)",
+            "Estatística": round(jb_stat_bruto, 2),
+            "p-value": (f"{jb_pval_bruto:.4e}" if jb_pval_bruto < 0.0001 else f"{jb_pval_bruto:.4f}"),
+            "Diagnóstico": "Rejeita Normalidade (inflacionado pela inicialização)",
+        },
+        {
+            "Teste": "Assimetria (Skewness)",
+            "Desfasamento": f"Global (n={len(resid)})",
+            "Estatística": round(assimetria, 4),
+            "p-value": "",
+            "Diagnóstico": "Cauda direita" if assimetria > 0.5 else "Aproximadamente simétrica",
+        },
+        {
+            "Teste": "Curtose em Excesso (Fisher)",
+            "Desfasamento": f"Global (n={len(resid)})",
+            "Estatística": round(curtose_excesso, 4),
+            "p-value": "",
+            "Diagnóstico": "Caudas pesadas" if curtose_excesso > 1.0 else "Curtose compatível com a normal",
+        },
+    ]
 
     for lag_idx, row in lb_teste.iterrows():
         p_q = cast(float, row["lb_pvalue"])
@@ -592,12 +666,14 @@ def executar_diagnostico_residuos(
     )
 
     # Subplot (a): Resíduos Padronizados ao longo do tempo
+    data_max = cast(pd.Timestamp, std_resid.idxmax())
     axes[0, 0].plot(resid.index, std_resid, color="#1f77b4", lw=0.9, label="Resíduos Padronizados")
     axes[0, 0].axhline(0, color="black", linestyle="-", lw=0.8, alpha=0.7)
     axes[0, 0].axhline(2, color="crimson", linestyle="--", lw=1.0, label=r"Limiares $\pm 2\sigma$")
     axes[0, 0].axhline(-2, color="crimson", linestyle="--", lw=1.0)
     axes[0, 0].set_title(
-        "(a) Resíduos Padronizados no Tempo (Sem desvio de média)",
+        f"(a) Resíduos Padronizados no Tempo (máx. {std_resid.max():+.1f}$\\sigma$ em "
+        f"{data_max.strftime('%Y-%m-%d')})",
         loc="left",
         fontweight="bold",
     )
@@ -626,7 +702,8 @@ def executar_diagnostico_residuos(
         label="Normal Teórica N(0,1)",
     )
     axes[0, 1].set_title(
-        f"(b) Distribuição dos Resíduos (JB p-value: {jb_pval:.2e})",
+        f"(b) Distribuição dos Resíduos (JB = {jb_stat:.0f}; assimetria {assimetria:+.2f}; "
+        f"curtose {curtose_excesso:+.1f})",
         loc="left",
         fontweight="bold",
     )
@@ -645,20 +722,46 @@ def executar_diagnostico_residuos(
     axes[1, 0].set_xlabel("Quantis Teóricos")
 
     # Subplot (d): Correlograma da FAC Residual (Teste de Ljung-Box)
+    # O título tem de dizer o que se vê. A FAC fica dentro da banda nos primeiros
+    # desfasamentos, mas o Ljung-Box rejeita a partir de um deles; escrever "ausência de
+    # correlação linear sistemática" contradizia a tabela de diagnóstico.
+    lags_resid_rejeitam = [int(lag) for lag in lb_teste.index if float(lb_teste.loc[lag, "lb_pvalue"]) <= 0.05]
+    titulo_fac_resid = (
+        f"(d) FAC Residual (Autocorrelação significativa a partir do lag {min(lags_resid_rejeitam)})"
+        if lags_resid_rejeitam
+        else "(d) FAC Residual (Sem autocorrelação significativa nos lags testados)"
+    )
     plot_acf(
         resid,
         ax=axes[1, 1],
         lags=30,
         alpha=0.05,
-        title="(d) FAC Residual (Ausência de correlação linear sistemática)",
+        title=titulo_fac_resid,
     )
+    # O lag 0 vale sempre 1 e esmagaria a escala; o eixo é limitado à zona onde as
+    # autocorrelações residuais (e a banda de confiança) são visíveis.
+    axes[1, 1].set_ylim(-0.25, 0.25)
     axes[1, 1].set_xlabel("Desfasamento (Lags)")
     axes[1, 1].set_ylabel("Autocorrelação Residual")
 
     plt.tight_layout()
     guardar_figura(fig, "fig_04_diagnostico_residuos")
 
-    return df_params, lb_teste, jb_pval
+    diag_resid: dict[str, object] = {
+        "jb_stat": float(jb_stat),
+        "jb_pval": float(jb_pval),
+        "jb_stat_bruto": float(jb_stat_bruto),
+        "jb_pval_bruto": float(jb_pval_bruto),
+        "assimetria": assimetria,
+        "curtose_excesso": curtose_excesso,
+        "n_resid": int(len(resid)),
+        "dp_resid": float(resid.std()),
+        "max_resid": float(resid.max()),
+        "max_resid_data": data_max.strftime("%Y-%m-%d"),
+        **ols_diag,
+    }
+
+    return df_params, lb_teste, diag_resid
 
 
 # Comparação Out-of-Sample e Previsões (tab_05, fig_05) — Slides 13, 59, 71
@@ -722,7 +825,7 @@ def consolidar_comparacao_econometrica(
     fig, ax = plt.subplots(figsize=(14, 7))
     fig.suptitle(
         "Previsões Fora da Amostra (Out-of-Sample) no Período de Teste (2022–2026)\n"
-        "Confronto: Valores Observados vs. Holt-Winters vs. ARIMA vs. ARIMAX\n"
+        "Confronto: Observado vs. Holt-Winters vs. ARIMA vs. ARIMAX (destaque: vencedor por REQM)\n"
         "ISEG — Time Series Forecasting — Aulas #1, #3 e #4 (Slides 13, 59, 71)",
         fontsize=12,
         fontweight="bold",
@@ -751,17 +854,16 @@ def consolidar_comparacao_econometrica(
     )
 
     # Previsões selecionadas
+    # O vencedor por REQM é destacado; as restantes especificações ficam em segundo
+    # plano. Sem ele, a figura que sustenta o Capítulo 4.4 não mostra o modelo que a
+    # síntese elege.
+    nome_vencedor = min(modelos_bj, key=lambda chave: modelos_bj[chave]["metricas"]["REQM"])
     cores_modelos = [
-        ("Holt-Winters Multiplicativo (s=52)", modelos_exp, "#d62728", "--", 1.2),
-        ("ARIMA(0, 1, 2) Univariado", modelos_bj, "#ff7f0e", ":", 1.2),
-        ("ARIMAX(0, 1, 2) + Covariáveis", modelos_bj, "#1f77b4", "-.", 1.5),
-        (
-            "SARIMAX(0, 1, 2) + Covariáveis + Fourier",
-            modelos_bj,
-            "#2ca02c",
-            "-",
-            1.6,
-        ),
+        (nome_vencedor, modelos_bj, "#9467bd", "-", 2.4),
+        ("Holt-Winters Multiplicativo (s=52)", modelos_exp, "#d62728", "--", 1.1),
+        ("ARIMA(0, 1, 2) Univariado", modelos_bj, "#ff7f0e", ":", 1.1),
+        ("ARIMAX(0, 1, 2) + Covariáveis", modelos_bj, "#1f77b4", "-.", 1.3),
+        ("SARIMAX(0, 1, 2) + Covariáveis + Fourier", modelos_bj, "#2ca02c", "-", 1.1),
     ]
 
     for nome_mod, dict_source, cor, estilo, espessura in cores_modelos:
@@ -769,7 +871,8 @@ def consolidar_comparacao_econometrica(
             p = dict_source[nome_mod]["previsoes"]
             reqm_val = dict_source[nome_mod]["metricas"]["REQM"]
             epam_val = dict_source[nome_mod]["metricas"]["EPAM"]
-            rotulo_legenda = f"{nome_mod} (REQM: {reqm_val:.1f}, EPAM: {epam_val:.1f}%)"
+            etiqueta = "Vencedor: " if nome_mod == nome_vencedor else ""
+            rotulo_legenda = f"{etiqueta}{nome_mod} (REQM: {reqm_val:.1f}, EPAM: {epam_val:.1f}%)"
             ax.plot(
                 test.index,
                 p,
@@ -777,6 +880,7 @@ def consolidar_comparacao_econometrica(
                 linestyle=estilo,
                 lw=espessura,
                 label=rotulo_legenda,
+                zorder=4 if nome_mod == nome_vencedor else 2,
             )
 
     # Linha divisória vertical de treino/teste
@@ -902,15 +1006,207 @@ def projetar_futuro_holt_winters(df: pd.DataFrame, modelos_exp: dict, horizonte:
     return df_futuro
 
 
+# Projeção de Cenários com o ARIMAX Vencedor (Slides 75-76 e 109-110)
+def projetar_cenarios_arimax(
+    df: pd.DataFrame,
+    modelos_bj: dict,
+    modelo_vencedor_info: tuple[str, SARIMAXResultsWrapper, list[str] | None],
+    horizonte: int = 52,
+) -> dict[str, object]:
+    """Projeta cenários a 52 semanas com o modelo ARIMAX vencedor, reajustado à amostra completa.
+
+    O modelo é reestimado em todas as semanas com fase de release conhecida (n = 1107), e
+    não na amostra de treino: uma projeção para o futuro usa toda a informação disponível.
+    As métricas fora da amostra continuam a ser as da estimação em treino, e a síntese
+    distingue explicitamente as duas coisas.
+
+    Como o ARIMAX é uma regressão com erros ARIMA e não um modelo de séries temporais
+    multivariado, o caminho futuro das covariáveis tem de ser fixado pelo analista. São
+    produzidos três cenários:
+
+    - **Cenário 1** congela as covariáveis no valor da última semana observada. É a leitura
+      literal de "X futuro = último X", e serve de diagnóstico: a última semana é um vale
+      (197 autores, 415 commits) e o erro do modelo é integrado, pelo que o desvio não é
+      corrigido ao longo do horizonte.
+    - **Cenário 1b** congela as covariáveis na média das últimas 52 semanas. É o cenário
+      estático defensável: descreve a atividade de um ano "típico", sem inventar calendário
+      de releases futuro.
+    - **Cenário 2** repete o caminho observado nas últimas 52 semanas (setembro de 2025 a
+      setembro de 2026), preservando a cadência real de merge windows e fases de release.
+      É o cenário "homólogo", o mais realista dos três.
+    """
+    rotulo, _res_treino, var_names = modelo_vencedor_info
+    exog_cols = var_names or []
+    if not exog_cols:
+        raise ValueError("o modelo vencedor não tem covariáveis exógenas; não há cenários a projetar")
+
+    print(f"[*] A projetar cenários a {horizonte} semanas com o ARIMAX vencedor ({rotulo})...")
+
+    amostra = df.dropna(subset=["fase_rc_inicial"])
+    ordem = cast(tuple[int, int, int], modelos_bj[rotulo]["ordem"])
+
+    # Reajuste à amostra completa (mesma especificação, mais informação)
+    mod_full = SARIMAX(
+        amostra["total_commits"],
+        exog=amostra[exog_cols],
+        order=ordem,
+        seasonal_order=(0, 0, 0, 0),
+        enforce_stationarity=False,
+        enforce_invertibility=False,
+    )
+    res_full = cast(SARIMAXResultsWrapper, mod_full.fit(disp=False, maxiter=200))
+
+    # Índice futuro: semanas W-MON a seguir à última observação
+    ultima_data = cast(pd.Timestamp, amostra.index[-1])
+    indice_futuro = pd.date_range(
+        start=ultima_data + pd.Timedelta(weeks=1), periods=horizonte, freq="W-MON"
+    )
+
+    ultima_semana = amostra[exog_cols].iloc[-1].to_numpy(dtype=float)
+    media_52 = amostra[exog_cols].iloc[-horizonte:].mean().to_numpy(dtype=float)
+    homologo = amostra[exog_cols].iloc[-horizonte:].to_numpy(dtype=float)
+
+    cenarios: dict[str, np.ndarray] = {
+        "Cenario_1_Estatico_Ultima_Semana": np.tile(ultima_semana, (horizonte, 1)),
+        "Cenario_1b_Estatico_Media_52s": np.tile(media_52, (horizonte, 1)),
+        "Cenario_2_Replay_Ultimas_52s": homologo,
+    }
+
+    previsoes = {
+        nome: res_full.forecast(
+            steps=horizonte,
+            exog=pd.DataFrame(matriz, columns=exog_cols, index=indice_futuro),
+        )
+        for nome, matriz in cenarios.items()
+    }
+
+    df_cenarios = pd.DataFrame({
+        "Data": indice_futuro.strftime("%Y-%m-%d"),
+        **{nome: np.round(prev.to_numpy(), 1) for nome, prev in previsoes.items()},
+    })
+    guardar_tabela(df_cenarios, "tab_09_previsao_futura_arimax_cenarios", "Tabela de cenários ARIMAX")
+
+    # Figura: história recente + os três cenários
+    n_amostra_txt = f"{len(amostra):,}".replace(",", ".")
+    fig, ax = plt.subplots(figsize=(14, 7.5))
+    fig.suptitle(
+        "Cenários de Projeção a 52 Semanas com o ARIMAX Vencedor (2026-2027)\n"
+        f"Reajuste de {rotulo} à Amostra Completa ({n_amostra_txt} semanas com fase de release conhecida)\n"
+        "ISEG — Time Series Forecasting — Aula #4 (Slides 75-76) e Aula #5 (Slides 109-110)",
+        fontsize=12,
+        fontweight="bold",
+        y=0.995,
+    )
+
+    historico = df.loc["2019-01-01":]
+    ax.plot(historico.index, historico["total_commits"], color="black", lw=1.3, label="Observado (2019-2026)")
+
+    estilos = {
+        "Cenario_1_Estatico_Ultima_Semana": (
+            "#d62728",
+            ":",
+            r"Cenário 1 — covariáveis congeladas na última semana ($X_{T}$: 197 autores, um vale)",
+        ),
+        "Cenario_1b_Estatico_Media_52s": (
+            "#2ca02c",
+            "--",
+            r"Cenário 1b — covariáveis congeladas na média das últimas 52 semanas",
+        ),
+        "Cenario_2_Replay_Ultimas_52s": (
+            "#1f77b4",
+            "-",
+            "Cenário 2 — covariáveis homólogas (repetição das últimas 52 semanas)",
+        ),
+    }
+    for nome, (cor, estilo, etiqueta) in estilos.items():
+        ax.plot(indice_futuro, previsoes[nome].to_numpy(), color=cor, linestyle=estilo, lw=1.8, label=etiqueta)
+
+    ax.axvline(
+        float(mdates.date2num(ultima_data)),
+        color="darkblue",
+        linestyle="--",
+        lw=1.2,
+        label=f"Fim do histórico observado ({ultima_data.strftime('%Y-%m-%d')})",
+    )
+    ax.axvspan(
+        float(mdates.date2num(ultima_data)),
+        float(mdates.date2num(cast(pd.Timestamp, indice_futuro[-1]))),
+        color="grey",
+        alpha=0.08,
+    )
+
+    ax.set_title(
+        r"Trajetória Condicional: o ARIMAX não projeta as covariáveis, pelo que cada cenário é uma hipótese sobre $X_{t+h}$",
+        loc="left",
+        fontweight="bold",
+        fontsize=10,
+    )
+    ax.set_ylabel("Total commits semanais")
+    ax.set_xlabel("Data")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.10), ncol=2, framealpha=0.9, fontsize=8.5)
+    ax.xaxis.set_major_locator(mdates.YearLocator(1))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+
+    plt.tight_layout()
+    guardar_figura(fig, "fig_09_previsao_futura_arimax_cenarios")
+
+    # Síntese numérica dos cenários e das âncoras, para a Secção 7 da síntese escrita
+    def milhares(valor: float) -> str:
+        return f"{valor:,.0f}".replace(",", ".")
+
+    def resumo(nome: str) -> dict[str, str]:
+        prev = previsoes[nome]
+        return {
+            "min": milhares(float(prev.min())),
+            "max": milhares(float(prev.max())),
+            "mediana": milhares(float(prev.median())),
+            "primeira": milhares(float(prev.iloc[0])),
+            "ultima": milhares(float(prev.iloc[-1])),
+        }
+
+    obs_52 = amostra["total_commits"].iloc[-horizonte:]
+
+    return {
+        "cenario_modelo": rotulo,
+        "cenario_n": milhares(float(len(amostra))),
+        "cenario_ultima_data": ultima_data.strftime("%Y-%m-%d"),
+        "cenario_obs_inicio": cast(pd.Timestamp, amostra.index[-horizonte]).strftime("%Y-%m-%d"),
+        "cenario_inicio": cast(pd.Timestamp, indice_futuro[0]).strftime("%Y-%m-%d"),
+        "cenario_fim": cast(pd.Timestamp, indice_futuro[-1]).strftime("%Y-%m-%d"),
+        "cenario_ultimo_observado": milhares(float(amostra["total_commits"].iloc[-1])),
+        "cenario_obs_media": milhares(float(obs_52.mean())),
+        "cenario_obs_mediana": milhares(float(obs_52.median())),
+        "cenario_obs_min": milhares(float(obs_52.min())),
+        "cenario_obs_max": milhares(float(obs_52.max())),
+        "cenario_ancora_autores": milhares(float(ultima_semana[0])),
+        "cenario_media_autores": milhares(float(media_52[0])),
+        "cenario_ancora_churn_linhas": milhares(float(np.expm1(ultima_semana[1]))),
+        "cenario_media_churn_linhas": milhares(float(np.expm1(media_52[1]))),
+        "cenario_media_rc_inicial": f"{float(media_52[2]) * 100:.0f}",
+        "cenario_media_rc_final": f"{float(media_52[3]) * 100:.0f}",
+        "cenario1_min": resumo("Cenario_1_Estatico_Ultima_Semana")["min"],
+        "cenario1_max": resumo("Cenario_1_Estatico_Ultima_Semana")["max"],
+        "cenario1b_min": resumo("Cenario_1b_Estatico_Media_52s")["min"],
+        "cenario1b_max": resumo("Cenario_1b_Estatico_Media_52s")["max"],
+        "cenario1b_mediana": resumo("Cenario_1b_Estatico_Media_52s")["mediana"],
+        "cenario2_min": resumo("Cenario_2_Replay_Ultimas_52s")["min"],
+        "cenario2_max": resumo("Cenario_2_Replay_Ultimas_52s")["max"],
+        "cenario2_mediana": resumo("Cenario_2_Replay_Ultimas_52s")["mediana"],
+        "cenario2_primeira": resumo("Cenario_2_Replay_Ultimas_52s")["primeira"],
+        "cenario2_ultima": resumo("Cenario_2_Replay_Ultimas_52s")["ultima"],
+    }
+
+
 # Síntese Interpretativa para o Relatório (ECONOMETRICS_SUMMARY.md)
 def exportar_resumo_econometria(
     df_adf: pd.DataFrame,
     df_comp: pd.DataFrame,
     df_params: pd.DataFrame,
     lb_teste: pd.DataFrame,
-    jb_pval: float,
+    diag_resid: dict[str, object],
     df_futuro: pd.DataFrame,
     corr_diag: dict[str, object],
+    cenario_diag: dict[str, object],
     train: pd.DataFrame,
     test: pd.DataFrame,
 ) -> None:
@@ -975,6 +1271,10 @@ def exportar_resumo_econometria(
     def pval_param(nome: str) -> object:
         linhas = df_params.loc[df_params["Parâmetro"] == nome, "p-value (P > |z|)"]
         return linhas.values[0] if not linhas.empty else "n/d"
+
+    def num(chave: str) -> float:
+        """Lê uma estatística do dicionário de diagnóstico como float."""
+        return float(cast(float, diag_resid[chave]))
 
     # Contributo incremental da fase de release: é a única forma honesta de justificar
     # a variável, porque o ganho global da Secção 4 é dominado por autores e churn.
@@ -1062,7 +1362,21 @@ def exportar_resumo_econometria(
         "lb_ok_txt": listar_lags(lags_ok),
         "lb_rejeita_txt": listar_lags(lags_rejeitam),
         "lb_leitura": lb_leitura,
-        "jb_pval": ("< 0.0001" if jb_pval < 0.0001 else f"= {jb_pval:.4f}"),
+        "jb_pval": ("< 0.0001" if num("jb_pval") < 0.0001 else f"= {num('jb_pval'):.4f}"),
+        "jb_stat": f"{num('jb_stat'):,.0f}".replace(",", "."),
+        "jb_pval_bruto": ("< 0.0001" if num("jb_pval_bruto") < 0.0001 else f"= {num('jb_pval_bruto'):.4f}"),
+        "jb_stat_bruto": f"{num('jb_stat_bruto'):,.0f}".replace(",", "."),
+        "n_resid": cast(int, diag_resid["n_resid"]),
+        "assimetria": f"{num('assimetria'):+.2f}",
+        "curtose_excesso": f"{num('curtose_excesso'):.1f}",
+        "dp_resid": f"{num('dp_resid'):.1f}".replace(".", ","),
+        "max_resid": f"{num('max_resid'):,.0f}".replace(",", "."),
+        "max_resid_data": diag_resid["max_resid_data"],
+        "max_resid_sigmas": f"{num('max_resid') / num('dp_resid'):.1f}".replace(".", ","),
+        "ols_niveis_autores": diag_resid["ols_niveis_autores"],
+        "ols_dif_autores": diag_resid["ols_dif_autores"],
+        "ols_niveis_churn": diag_resid["ols_niveis_churn"],
+        "ols_dif_churn": diag_resid["ols_dif_churn"],
         "prev_min": f"{df_futuro.loc[idx_prev_min, 'Previsao_Commits']:,.0f}".replace(",", "."),
         "prev_max": f"{df_futuro.loc[idx_prev_max, 'Previsao_Commits']:,.0f}".replace(",", "."),
         "prev_min_data": df_futuro.loc[idx_prev_min, "Data"],
@@ -1070,6 +1384,7 @@ def exportar_resumo_econometria(
         "prev_inicio": df_futuro["Data"].iloc[0],
         "prev_fim": df_futuro["Data"].iloc[-1],
         **corr_diag,
+        **cenario_diag,
     }
 
     for lag in (1, 5, 10, 15, 20):
@@ -1086,11 +1401,12 @@ def main():
     corr_diag = criar_correlogramas_fac_facp(train)
     modelos_exp = modelar_alisamento_exponencial(train, test)
     modelos_bj, modelo_vencedor_info = modelar_arima_arimax(train, test)
-    df_params, lb_teste, jb_pval = executar_diagnostico_residuos(modelo_vencedor_info)
+    df_params, lb_teste, diag_resid = executar_diagnostico_residuos(modelo_vencedor_info, train)
     df_comp = consolidar_comparacao_econometrica(train, test, modelos_exp, modelos_bj)
     df_futuro = projetar_futuro_holt_winters(df, modelos_exp, horizonte=52)
+    cenario_diag = projetar_cenarios_arimax(df, modelos_bj, modelo_vencedor_info, horizonte=52)
     exportar_resumo_econometria(
-        df_adf, df_comp, df_params, lb_teste, jb_pval, df_futuro, corr_diag, train, test
+        df_adf, df_comp, df_params, lb_teste, diag_resid, df_futuro, corr_diag, cenario_diag, train, test
     )
     finalizar_script("02")
 

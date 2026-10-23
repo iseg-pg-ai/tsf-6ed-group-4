@@ -227,20 +227,28 @@ def treinar_e_avaliar_modelo(
     y_tr_t = torch.tensor(y_train, dtype=torch.float32).unsqueeze(1).to(device)
     X_te_t = torch.tensor(X_test, dtype=torch.float32).to(device)
 
-    # Data Loader
-    dataset = torch.utils.data.TensorDataset(X_tr_t, y_tr_t)
-    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
-
     # Histórico de perda
     train_losses = []
     val_losses = []
 
-    # Divisão treino/validação (90:10 do treino para monitorização de sobreajustamento)
+    # Divisão treino/validação (90:10 do treino para monitorização de sobreajustamento).
+    # A parte final do treino é reservada para validação e não entra nos lotes.
     n_val = int(len(X_train) * 0.1)
     X_val_t = X_tr_t[-n_val:]
     y_val_t = y_tr_t[-n_val:]
     X_tr_t = X_tr_t[:-n_val]
     y_tr_t = y_tr_t[:-n_val]
+
+    # O DataLoader é construído DEPOIS do corte. Construído antes (como estava), os
+    # últimos 10% do treino entravam nos lotes de treino e a curva de validação media
+    # dados que o modelo já tinha visto: a validação deixava de detetar sobreajustamento,
+    # que é precisamente o que os Slides 94 e 111 pedem para vigiar.
+    dataset = torch.utils.data.TensorDataset(X_tr_t, y_tr_t)
+    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+    # Parâmetros treináveis: vai para a tabela de hiperparâmetros (tab_06), para que a
+    # capacidade de cada arquitetura fique documentada e não estimada a partir do nome.
+    n_parametros = sum(p.numel() for p in modelo.parameters() if p.requires_grad)
 
     for epoch in range(epochs):
         modelo.train()
@@ -289,6 +297,7 @@ def treinar_e_avaliar_modelo(
         "val_losses": val_losses,
         "historico": df_historico,
         "metricas": metricas,
+        "parametros": n_parametros,
     }
 
 
@@ -298,7 +307,7 @@ def treinar_modelos(
     scaler_y: MinMaxScaler,
     window_size: int = 28,
     epochs: int = 15,
-) -> tuple[dict, dict, dict]:
+) -> tuple[dict, dict, dict, dict[str, int]]:
     """Instancia, treina e avalia as 4 arquiteturas nos três regimes de features."""
     print("\n[*] A treinar modelos de Aprendizagem Profunda...")
 
@@ -312,6 +321,7 @@ def treinar_modelos(
     resultados = {}
     hist_loss = {}
     previsoes_teste = {}
+    parametros: dict[str, int] = {}
     historicos = []
 
     for rotulo in REGIMES:
@@ -342,6 +352,7 @@ def treinar_modelos(
                 lr=0.001,
             )
             resultados[nome] = res["metricas"]
+            parametros[nome] = res["parametros"]
             hist_loss[nome] = {"train": res["train_losses"], "val": res["val_losses"]}
             previsoes_teste[nome] = {"pred": res["previsoes"], "real": res["y_real"]}
             historicos.append(res["historico"])
@@ -366,12 +377,13 @@ def treinar_modelos(
     df_perdas = pd.concat(historicos, ignore_index=True)
     guardar_tabela(df_perdas, "curvas_aprendizagem", "Tabela de perdas por época")
 
-    return resultados, hist_loss, previsoes_teste
+    return resultados, hist_loss, previsoes_teste, parametros
 
 
 # Geração de Tabelas (tab_06 e tab_07)
 def gerar_tabelas_dl(
     resultados: dict,
+    parametros: dict[str, int],
     dados_por_regime: dict[str, DadosJanela],
     window_size: int = 28,
     epochs: int = 15,
@@ -406,6 +418,7 @@ def gerar_tabelas_dl(
                 "Features de Entrada (F)": n_features,
                 "Camadas": camadas,
                 "Neurónios": neuronios,
+                "Parametros_Treinaveis": parametros[nome],
                 "Janela W": window_size,
                 "Batch Size": 64,
                 "Taxa de Aprendizagem": 0.001,
@@ -441,8 +454,10 @@ def criar_figura_curvas_aprendizagem(hist_loss: dict) -> None:
         for coluna, arquitetura in enumerate(arquiteturas):
             ax = axes[linha, coluna]
             nome = f"{arquitetura} {rotulo}"
-            ax.plot(hist_loss[nome]["train"], color="#1f77b4", lw=1.2, label="Treino (MSE)")
-            ax.plot(hist_loss[nome]["val"], color="#d62728", lw=1.2, linestyle="--", label="Validação (MSE)")
+            ax.plot(range(1, len(hist_loss[nome]["train"]) + 1), hist_loss[nome]["train"], color="#1f77b4", lw=1.2,
+                    label="Treino (MSE)")
+            ax.plot(range(1, len(hist_loss[nome]["train"]) + 1), hist_loss[nome]["val"], color="#d62728", lw=1.2,
+                    linestyle="--", label="Validação (MSE)")
             ax.set_title(f"{arquitetura} — {rotulo}", loc="left", fontweight="bold", fontsize=10)
             ax.set_ylabel("MSE")
             ax.set_xlabel("Época")
@@ -592,11 +607,11 @@ def main():
     dados_por_regime, scaler_y = preparar_janelas_deslizantes(
         train, test, features_mult, features_release, window_size=WINDOW_SIZE
     )
-    resultados, hist_loss, previsoes_teste = treinar_modelos(
+    resultados, hist_loss, previsoes_teste, parametros = treinar_modelos(
         dados_por_regime, scaler_y, window_size=WINDOW_SIZE, epochs=EPOCHS
     )
     dimensoes = {rotulo: dados_por_regime[rotulo][0].shape[2] for rotulo in REGIMES}
-    gerar_tabelas_dl(resultados, dados_por_regime, window_size=WINDOW_SIZE, epochs=EPOCHS)
+    gerar_tabelas_dl(resultados, parametros, dados_por_regime, window_size=WINDOW_SIZE, epochs=EPOCHS)
     criar_figura_curvas_aprendizagem(hist_loss)
     criar_figura_previsoes_teste(test, previsoes_teste, resultados, dimensoes, window_size=WINDOW_SIZE)
     exportar_resumo_dl(resultados)

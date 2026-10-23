@@ -31,7 +31,8 @@ produz as semanas extremas:
   não durante a janela de merge.
 - Dos 40 resíduos com `|Z| > 2`, nenhum cai em rc1-rc5. E o sinal inverte-se em 2015: entre
   2005 e 2014 há 19 picos positivos na merge window contra 4 no fim do ciclo; a partir de 2015
-  há 0 picos positivos e todos os 6 quedas negativas passam a ocorrer no fim do ciclo.
+  há 0 picos positivos e todas as 6 quedas negativas ocorrem na merge window, com 11 picos
+  positivos a transitar para o fim do ciclo.
 
 Ou seja: a variável descreve um mecanismo institucional, não uma correlação espúria, e é
 conhecida **antes** de a semana começar — ao contrário de `unique_authors` e `log_churn`, que só

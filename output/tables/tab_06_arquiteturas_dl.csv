@@ -1,13 +1,13 @@
-Modelo,Regime,Features de Entrada (F),Camadas,Neurónios,Janela W,Batch Size,Taxa de Aprendizagem,Otimizador,Função de Perda,Épocas,Seed
-1D-CNN,Univariado (F=1),1,"Conv1D(32, k=3) + MaxPool + Conv1D(64, k=3) + MaxPool + Dense(64) + Dropout(0.2) + Dense(1)",32 + 64 + 64,28,64,0.001,Adam,MSE,15,42
-SimpleRNN,Univariado (F=1),1,RNN(50) + Dense(1),50,28,64,0.001,Adam,MSE,15,42
-LSTM,Univariado (F=1),1,LSTM(50) + Dense(1),50,28,64,0.001,Adam,MSE,15,42
-GRU,Univariado (F=1),1,GRU(50) + Dense(1),50,28,64,0.001,Adam,MSE,15,42
-1D-CNN,Multivariado (F=6),6,"Conv1D(32, k=3) + MaxPool + Conv1D(64, k=3) + MaxPool + Dense(64) + Dropout(0.2) + Dense(1)",32 + 64 + 64,28,64,0.001,Adam,MSE,15,42
-SimpleRNN,Multivariado (F=6),6,RNN(50) + Dense(1),50,28,64,0.001,Adam,MSE,15,42
-LSTM,Multivariado (F=6),6,LSTM(50) + Dense(1),50,28,64,0.001,Adam,MSE,15,42
-GRU,Multivariado (F=6),6,GRU(50) + Dense(1),50,28,64,0.001,Adam,MSE,15,42
-1D-CNN,Multivariado + Release (F=8),8,"Conv1D(32, k=3) + MaxPool + Conv1D(64, k=3) + MaxPool + Dense(64) + Dropout(0.2) + Dense(1)",32 + 64 + 64,28,64,0.001,Adam,MSE,15,42
-SimpleRNN,Multivariado + Release (F=8),8,RNN(50) + Dense(1),50,28,64,0.001,Adam,MSE,15,42
-LSTM,Multivariado + Release (F=8),8,LSTM(50) + Dense(1),50,28,64,0.001,Adam,MSE,15,42
-GRU,Multivariado + Release (F=8),8,GRU(50) + Dense(1),50,28,64,0.001,Adam,MSE,15,42
+Modelo,Regime,Features de Entrada (F),Camadas,Neurónios,Parametros_Treinaveis,Janela W,Batch Size,Taxa de Aprendizagem,Otimizador,Função de Perda,Épocas,Seed
+1D-CNN,Univariado (F=1),1,"Conv1D(32, k=3) + MaxPool + Conv1D(64, k=3) + MaxPool + Dense(64) + Dropout(0.2) + Dense(1)",32 + 64 + 64,35137,28,64,0.001,Adam,MSE,15,42
+SimpleRNN,Univariado (F=1),1,RNN(50) + Dense(1),50,2701,28,64,0.001,Adam,MSE,15,42
+LSTM,Univariado (F=1),1,LSTM(50) + Dense(1),50,10651,28,64,0.001,Adam,MSE,15,42
+GRU,Univariado (F=1),1,GRU(50) + Dense(1),50,8001,28,64,0.001,Adam,MSE,15,42
+1D-CNN,Multivariado (F=6),6,"Conv1D(32, k=3) + MaxPool + Conv1D(64, k=3) + MaxPool + Dense(64) + Dropout(0.2) + Dense(1)",32 + 64 + 64,35617,28,64,0.001,Adam,MSE,15,42
+SimpleRNN,Multivariado (F=6),6,RNN(50) + Dense(1),50,2951,28,64,0.001,Adam,MSE,15,42
+LSTM,Multivariado (F=6),6,LSTM(50) + Dense(1),50,11651,28,64,0.001,Adam,MSE,15,42
+GRU,Multivariado (F=6),6,GRU(50) + Dense(1),50,8751,28,64,0.001,Adam,MSE,15,42
+1D-CNN,Multivariado + Release (F=8),8,"Conv1D(32, k=3) + MaxPool + Conv1D(64, k=3) + MaxPool + Dense(64) + Dropout(0.2) + Dense(1)",32 + 64 + 64,35809,28,64,0.001,Adam,MSE,15,42
+SimpleRNN,Multivariado + Release (F=8),8,RNN(50) + Dense(1),50,3051,28,64,0.001,Adam,MSE,15,42
+LSTM,Multivariado + Release (F=8),8,LSTM(50) + Dense(1),50,12051,28,64,0.001,Adam,MSE,15,42
+GRU,Multivariado + Release (F=8),8,GRU(50) + Dense(1),50,9051,28,64,0.001,Adam,MSE,15,42

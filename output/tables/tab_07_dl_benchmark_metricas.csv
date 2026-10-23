@@ -1,13 +1,13 @@
 Modelo,Regime,REQM,EAM,EPAM,EPAMs
-1D-CNN Univariado,Univariado (F=1),149.84,85.37,67.57,39.25
-SimpleRNN Univariado,Univariado (F=1),142.13,91.86,73.94,44.44
-LSTM Univariado,Univariado (F=1),164.68,118.79,132.71,55.4
-GRU Univariado,Univariado (F=1),143.21,90.36,71.54,43.58
-1D-CNN Multivariado,Multivariado (F=6),130.26,76.42,54.67,35.79
-SimpleRNN Multivariado,Multivariado (F=6),136.31,85.33,64.9,43.23
-LSTM Multivariado,Multivariado (F=6),129.94,77.93,58.75,36.44
-GRU Multivariado,Multivariado (F=6),132.15,79.43,54.07,38.06
-1D-CNN Multivariado + Release,Multivariado + Release (F=8),125.68,72.64,58.2,34.58
-SimpleRNN Multivariado + Release,Multivariado + Release (F=8),132.69,82.94,67.29,44.1
-LSTM Multivariado + Release,Multivariado + Release (F=8),126.99,75.72,59.7,37.01
-GRU Multivariado + Release,Multivariado + Release (F=8),127.49,75.79,57.51,36.24
+1D-CNN Univariado,Univariado (F=1),147.77,87.98,80.88,40.83
+SimpleRNN Univariado,Univariado (F=1),143.14,95.07,84.42,45.67
+LSTM Univariado,Univariado (F=1),163.28,117.66,130.88,54.93
+GRU Univariado,Univariado (F=1),142.37,92.63,80.91,44.42
+1D-CNN Multivariado,Multivariado (F=6),128.63,78.57,62.22,36.81
+SimpleRNN Multivariado,Multivariado (F=6),134.53,88.01,73.52,43.18
+LSTM Multivariado,Multivariado (F=6),130.42,79.86,60.86,37.28
+GRU Multivariado,Multivariado (F=6),130.88,82.1,67.89,38.35
+1D-CNN Multivariado + Release,Multivariado + Release (F=8),125.39,76.97,69.01,36.27
+SimpleRNN Multivariado + Release,Multivariado + Release (F=8),133.43,86.7,75.73,43.3
+LSTM Multivariado + Release,Multivariado + Release (F=8),127.77,78.83,65.1,37.03
+GRU Multivariado + Release,Multivariado + Release (F=8),127.46,77.46,63.72,36.33

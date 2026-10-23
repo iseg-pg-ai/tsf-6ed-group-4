@@ -66,6 +66,7 @@ def consolidar_benchmark() -> pd.DataFrame:
         registos.append({
             "Modelo": row["Modelo"],
             "Família": "Econometria Clássica",
+            "Frequência do Alvo": "Semanal",
             "Regime": row["Família"],
             "REQM (RMSE)": row["REQM"],
             "EAM (MAE)": row["EAM"],
@@ -78,6 +79,7 @@ def consolidar_benchmark() -> pd.DataFrame:
         registos.append({
             "Modelo": row["Modelo"],
             "Família": "Deep Learning",
+            "Frequência do Alvo": "Diária",
             "Regime": row["Regime"],
             "REQM (RMSE)": row["REQM"],
             "EAM (MAE)": row["EAM"],
@@ -93,69 +95,89 @@ def consolidar_benchmark() -> pd.DataFrame:
 
 # Geração da Figura Mestre (fig_08_master_benchmark.[png|svg])
 def gerar_figura_master(df_master: pd.DataFrame) -> None:
-    """Gera a Figura Mestre com a comparação de todos os modelos."""
+    """Gera a Figura Mestre em dois painéis, um por família de modelos.
+
+    As duas famílias não partilham unidade nem horizonte de avaliação: a Deep Learning é
+    avaliada um passo à frente numa série diária (commits/dia) e a econometria é avaliada
+    em 224 passos dinâmicos numa série semanal (commits/semana). Barras lado a lado na
+    mesma escala sugeriam que a DL é quatro vezes melhor, quando o que muda é a unidade.
+    Cada família tem o seu painel, com eixo de x independente, e a leitura entre famílias
+    faz-se pelo EPAM e pelo EPAMs, que são adimensionais.
+    """
     print("[*] A gerar Figura Mestre de Benchmark (fig_08_master_benchmark)...")
 
-    fig, ax = plt.subplots(figsize=(12, 8))
+    familias = [
+        (
+            "Deep Learning",
+            "#2ca02c",
+            "(a) Deep Learning — Série Diária",
+            "1.563 dias de teste · previsão estática a 1 passo",
+            "REQM (RMSE) em commits/dia — quanto mais baixo, melhor",
+        ),
+        (
+            "Econometria Clássica",
+            "#1f77b4",
+            "(b) Econometria Clássica — Série Semanal",
+            "224 semanas de teste · previsão dinâmica",
+            "REQM (RMSE) em commits/semana — quanto mais baixo, melhor",
+        ),
+    ]
+
+    fig, axes = plt.subplots(1, 2, figsize=(17, 8.5))
     fig.suptitle(
         "Tabela Mestre de Benchmark: Econometria Clássica vs. Deep Learning\n"
-        "Avaliação Out-of-Sample (REQM / RMSE)\n"
+        "Avaliação Out-of-Sample (REQM / RMSE, por família e na sua própria unidade)\n"
         "ISEG — Time Series Forecasting — Aulas #1 a #5",
         fontsize=13,
         fontweight="bold",
         y=0.99,
     )
 
-    # Paleta de cores por família
-    cores_familia = {
-        "Econometria Clássica": "#1f77b4",
-        "Deep Learning": "#2ca02c",
-    }
+    for ax, (familia, cor, titulo, subtitulo, rotulo_x) in zip(axes, familias):
+        df_plot = df_master[df_master["Família"] == familia].sort_values(by="REQM (RMSE)", ascending=True)
 
-    # Ordenar por REQM
-    df_plot = df_master.sort_values(by="REQM (RMSE)", ascending=True)
-
-    # Criar gráfico de barras horizontais
-    y_pos = np.arange(len(df_plot))
-    bars = ax.barh(
-        y_pos,
-        df_plot["REQM (RMSE)"],
-        color=[cores_familia[f] for f in df_plot["Família"]],
-        alpha=0.85,
-    )
-
-    # Adicionar rótulos nas barras
-    for bar, reqm, epam in zip(bars, df_plot["REQM (RMSE)"], df_plot["EPAM (MAPE)"]):
-        ax.text(
-            bar.get_width() + 5,
-            bar.get_y() + bar.get_height() / 2,
-            f"REQM={reqm:.1f} | EPAM={epam:.1f}%",
-            va="center",
-            fontsize=9,
-            fontweight="bold",
+        y_pos = np.arange(len(df_plot))
+        barras = ax.barh(
+            y_pos,
+            df_plot["REQM (RMSE)"],
+            color=cor,
+            alpha=0.85,
+            height=0.72,
         )
 
-    ax.set_yticks(y_pos)
-    ax.set_yticklabels(df_plot["Modelo"], fontsize=9)
-    ax.invert_yaxis()
-    ax.set_xlabel("REQM (RMSE) — Quanto mais baixo, melhor")
-    ax.set_title(
-        "Comparação de Todos os Modelos Avaliados (224 Semanas de Teste para Econometria, 1.563 Dias para DL)",
-        loc="left",
-        fontweight="bold",
-        fontsize=10,
+        # Os rótulos ficam dentro dos limites do eixo: o eixo de x é esticado para lhes
+        # dar espaço (antes, os valores dos modelos de maior REQM saíam da figura).
+        reqm_max = float(df_plot["REQM (RMSE)"].max())
+        for barra, reqm, epam in zip(barras, df_plot["REQM (RMSE)"], df_plot["EPAM (MAPE)"]):
+            ax.text(
+                barra.get_width() + reqm_max * 0.015,
+                barra.get_y() + barra.get_height() / 2,
+                f"{reqm:.1f} · EPAM {epam:.1f}%",
+                va="center",
+                fontsize=9,
+            )
+
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(df_plot["Modelo"], fontsize=9)
+        ax.invert_yaxis()
+        ax.set_xlim(0, reqm_max * 1.45)
+        ax.set_xlabel(rotulo_x)
+        ax.set_title(f"{titulo}\n{subtitulo}", loc="left", fontweight="bold", fontsize=10.5)
+        ax.grid(axis="x", alpha=0.4)
+
+    fig.text(
+        0.5,
+        0.015,
+        "O REQM não é comparável entre os dois painéis: mudam a unidade (commits/dia vs. commits/semana) e o\n"
+        "horizonte de avaliação (1 passo estático vs. 224 passos dinâmicos). A comparação entre famílias faz-se\n"
+        "pelo EPAM e pelo EPAMs, que são adimensionais.",
+        ha="center",
+        va="bottom",
+        fontsize=9,
+        style="italic",
     )
 
-    # Legenda
-    from matplotlib.patches import Patch
-
-    legend_elements = [
-        Patch(facecolor=cores_familia["Econometria Clássica"], alpha=0.85, label="Econometria Clássica"),
-        Patch(facecolor=cores_familia["Deep Learning"], alpha=0.85, label="Deep Learning"),
-    ]
-    ax.legend(handles=legend_elements, loc="lower right")
-
-    plt.tight_layout()
+    plt.tight_layout(rect=(0, 0.075, 1, 0.94))
     guardar_figura(fig, "fig_08_master_benchmark")
 
 

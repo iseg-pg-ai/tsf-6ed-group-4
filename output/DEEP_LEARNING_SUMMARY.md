@@ -11,7 +11,7 @@
 * **Prevenção de Data Leakage:**
   * Divisão estritamente cronológica (80% treino, 20% teste).
   * `MinMaxScaler` ajustado **exclusivamente na amostra de treino** e aplicado à amostra de teste (sem contaminação).
-  * Divisão interna treino/validação (90:10) para monitorização de sobreajustamento durante o treino.
+  * Divisão interna treino/validação (90:10) para monitorização de sobreajustamento durante o treino. Os 10% finais do treino são reservados **antes** de construir os lotes, pelo que não entram no treino: se entrassem, a curva de validação media dados já vistos e não detetava sobreajustamento.
 * **Amostra de treino comum aos três regimes:** os 62 dias anteriores ao primeiro *tag* de release não têm fase conhecida e são removidos do treino em **todos** os regimes, ficando 6.190 dias. Se só o regime com a fase os perdesse, os outros treinariam com mais 62 janelas e a comparação entre regimes deixaria de ser justa. O conjunto de teste (2022-2026) não tem valores em falta e não é afetado.
 * **Reprodutibilidade:** `torch.manual_seed(42)` no início de cada regime, para que a mesma arquitetura arranque dos mesmos pesos nos três regimes e a diferença de métricas meça o efeito das features e não o sorteio da inicialização. Sem seed, duas execuções do mesmo script davam métricas diferentes; a variabilidade entre seeds foi medida em ±0,2 de REQM, muito abaixo das diferenças discutidas.
 
@@ -37,18 +37,18 @@
   * Justificação, alternativas testadas e variância entre seeds: `scripts/analise_covariaveis_release/README.md`.
 
 ### Comparação Univariado vs. Multivariado (REQM):
-  * **1D-CNN:** Univariado REQM=149.84 (EPAM=67.57%) vs. Multivariado REQM=130.26 (EPAM=54.67%) -> Ganho de +13.1%
-  * **SimpleRNN:** Univariado REQM=142.13 (EPAM=73.94%) vs. Multivariado REQM=136.31 (EPAM=64.90%) -> Ganho de +4.1%
-  * **LSTM:** Univariado REQM=164.68 (EPAM=132.71%) vs. Multivariado REQM=129.94 (EPAM=58.75%) -> Ganho de +21.1%
-  * **GRU:** Univariado REQM=143.21 (EPAM=71.54%) vs. Multivariado REQM=132.15 (EPAM=54.07%) -> Ganho de +7.7%
+  * **1D-CNN:** Univariado REQM=147.77 (EPAM=80.88%) vs. Multivariado REQM=128.63 (EPAM=62.22%) -> Ganho de +13.0%
+  * **SimpleRNN:** Univariado REQM=143.14 (EPAM=84.42%) vs. Multivariado REQM=134.53 (EPAM=73.52%) -> Ganho de +6.0%
+  * **LSTM:** Univariado REQM=163.28 (EPAM=130.88%) vs. Multivariado REQM=130.42 (EPAM=60.86%) -> Ganho de +20.1%
+  * **GRU:** Univariado REQM=142.37 (EPAM=80.91%) vs. Multivariado REQM=130.88 (EPAM=67.89%) -> Ganho de +8.1%
 
 ### Comparação Multivariado vs. Multivariado + Release (REQM):
-  * **1D-CNN:** Multivariado REQM=130.26 vs. Multivariado + Release REQM=125.68 -> Ganho de +3.5% (EPAM 54.67% -> 58.20%)
-  * **SimpleRNN:** Multivariado REQM=136.31 vs. Multivariado + Release REQM=132.69 -> Ganho de +2.7% (EPAM 64.90% -> 67.29%)
-  * **LSTM:** Multivariado REQM=129.94 vs. Multivariado + Release REQM=126.99 -> Ganho de +2.3% (EPAM 58.75% -> 59.70%)
-  * **GRU:** Multivariado REQM=132.15 vs. Multivariado + Release REQM=127.49 -> Ganho de +3.5% (EPAM 54.07% -> 57.51%)
-* **Efeito da fase de release:** a fase do ciclo de release melhora o REQM em média 3.0% (entre +2.3% e +3.5% nas quatro arquiteturas).
-* **Melhor Modelo Global:** **1D-CNN Multivariado + Release** com REQM = 125.68 e EPAM = 58.20%.
+  * **1D-CNN:** Multivariado REQM=128.63 vs. Multivariado + Release REQM=125.39 -> Ganho de +2.5% (EPAM 62.22% -> 69.01%)
+  * **SimpleRNN:** Multivariado REQM=134.53 vs. Multivariado + Release REQM=133.43 -> Ganho de +0.8% (EPAM 73.52% -> 75.73%)
+  * **LSTM:** Multivariado REQM=130.42 vs. Multivariado + Release REQM=127.77 -> Ganho de +2.0% (EPAM 60.86% -> 65.10%)
+  * **GRU:** Multivariado REQM=130.88 vs. Multivariado + Release REQM=127.46 -> Ganho de +2.6% (EPAM 67.89% -> 63.72%)
+* **Efeito da fase de release:** a fase do ciclo de release melhora o REQM em média 2.0% (entre +0.8% e +2.6% nas quatro arquiteturas).
+* **Melhor Modelo Global:** **1D-CNN Multivariado + Release** com REQM = 125.39 e EPAM = 69.01%.
 * **Interpretação (Slide 94 e 111):** As redes recorrentes (LSTM e GRU) beneficiam significativamente da informação multivariada, capturando não-linearidades nas interações entre volume de commits, disponibilidade de contribuidores e volatilidade de código. O ganho da fase de release é muito menor do que o do bloco de autores e churn — como seria de esperar, porque descreve o calendário e não a intensidade do trabalho —, mas é o único que não exige conhecer o futuro para prever o presente.
 
 ---
@@ -64,7 +64,7 @@
   * *Conteúdo:* Avaliação comparativa das 12 variantes neuronais (1D-CNN, SimpleRNN, LSTM e GRU em três regimes: univariado, multivariado e multivariado com a fase do ciclo de release) com métricas de teste (REQM, EAM, EPAM e EPAMs).
   * *Por que considerar:* Permite ao Elemento B analisar e discutir os resultados de Deep Learning de forma independente, facilitando a elaboração do Capítulo 5 antes da consolidação mestre no Capítulo 6.
   * *Valor analítico:* Demonstra empiricamente o ganho de precisão alcançado com variáveis exógenas e harmónicas em cada classe de rede neuronal (recorrentes com portas vs. convoluções temporais), e isola o contributo da fase do ciclo de release.
-* **Nota obrigatória sobre o EPAM nesta frequência:** o EPAM é instável em dados diários porque muitos dias têm poucos commits (fins de semana e feriados), o que infla o erro relativo; o EPAMs, por ser simétrico, mostra um padrão mais estável. Ao acrescentar a fase do ciclo de release, o **REQM e o EAM melhoram nas quatro arquiteturas, mas o EPAM piora nas quatro** e o EPAMs é misto — a comparação linha a linha está na `tab_07`. O regime com a fase foi escolhido pelo **REQM**, que é o critério de seleção usado em todo o trabalho, e a codificação por duas dummies é a melhor das três nessa métrica, no EAM e no EPAMs (variante com uma única dummy de *merge window* testada e registada em `scripts/analise_covariaveis_release/`). Declarar esta troca é preferível a escondê-la: o relatório deve dizer que o modelo com a fase acerta melhor em erro absoluto e pior em erro relativo nos dias de baixo volume.
+* **Nota obrigatória sobre o EPAM nesta frequência:** o EPAM é instável em dados diários porque muitos dias têm poucos commits (fins de semana e feriados), o que infla o erro relativo; o EPAMs, por ser simétrico, mostra um padrão mais estável. Ao acrescentar a fase do ciclo de release, o **REQM e o EAM melhoram nas quatro arquiteturas**, o **EPAM piora em três das quatro** (1D-CNN, SimpleRNN e LSTM, melhorando apenas na GRU) e o **EPAMs melhora em três das quatro** (1D-CNN, LSTM e GRU) — a comparação linha a linha está na `tab_07`. O regime com a fase foi escolhido pelo **REQM**, que é o critério de seleção usado em todo o trabalho, e a codificação por duas dummies é a melhor das três nessa métrica, no EAM e no EPAMs (variante com uma única dummy de *merge window* testada e registada em `scripts/analise_covariaveis_release/`). Declarar esta troca é preferível a escondê-la: o relatório deve dizer que o modelo com a fase acerta melhor em erro absoluto e que nos dias de baixo volume o erro relativo é sensível ao tipo de arquitetura.
 * **Tabela de Trajetória de Aprendizagem (`curvas_aprendizagem.csv`):**
   * *Conteúdo:* Histórico granular da perda época a época (1 a 15) de treino (`Train_Loss`) e validação (`Val_Loss`) em escala MSE para as 12 variantes (4 arquiteturas x 3 regimes).
   * *Por que considerar:* Fornece o suporte numérico exato subjacente à Figura 6 (`fig_06_curvas_aprendizagem`), permitindo ao redator citar taxas de decaimento do erro e valores finais exatos.
