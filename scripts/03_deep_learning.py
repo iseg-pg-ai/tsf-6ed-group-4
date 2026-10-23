@@ -26,6 +26,8 @@ Conformidade com os Slides da Aula #5 (Slides 79 a 111):
 - LSTM (Long Short-Term Memory, Slides 97-98, 102)
 - GRU (Gated Recurrent Unit, Slides 99, 103)
 - Regime Univariado vs. Multivariado (Slides 106-108)
+- Terceiro regime: multivariado + fase do ciclo de release (justificação em
+  scripts/analise_covariaveis_release/README.md)
 - Avaliação out-of-sample (REQM, EAM, EPAM e EPAMs) (Slide 13, 108)
 - Cuidado com sobreajustamento em séries temporais (Slide 94 e 111)
 ================================================================================
@@ -69,9 +71,22 @@ plt.rcParams.update(RC_PARAMS)
 # Configuração de dispositivo (CPU devido a incompatibilidade da placa gráfica de alguns colegas)
 device = torch.device("cpu")
 
+# Seed fixa: sem ela, duas execuções do mesmo script davam métricas diferentes (a
+# inicialização dos pesos e a ordem dos lotes são aleatórias). A seed é reposta no
+# início de cada regime, para que a mesma arquitetura arranque dos mesmos pesos nos
+# três regimes e a diferença de métricas meça o efeito das features, não o sorteio.
+SEED = 42
+
+# Rótulos dos regimes neuronais. O número de features não é escrito à mão: é lido da
+# forma dos tensores, para nunca dessincronizar da lista de colunas em carregar_dados_e_preparar.
+REGIMES = ("Univariado", "Multivariado", "Multivariado + Release")
+
+# (X, y) de treino e de teste de um regime
+DadosJanela = tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+
 
 # Ingestão de Dados e Divisão Cronológica (80:20)
-def carregar_dados_e_preparar() -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
+def carregar_dados_e_preparar() -> tuple[pd.DataFrame, pd.DataFrame, list[str], list[str]]:
     """Carrega a série diária, constrói variáveis exógenas e executa a divisão cronológica."""
     print("[*] A carregar série diária e a aplicar divisão treino/teste (80:20)...")
 
@@ -85,6 +100,16 @@ def carregar_dados_e_preparar() -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
     df["sin_7_1"] = np.sin(2 * np.pi * 1 * t / 7.0)
     df["cos_7_1"] = np.cos(2 * np.pi * 1 * t / 7.0)
 
+    # Fase do ciclo de release como duas dummies, com a merge window como referência:
+    # exatamente a codificação da especificação ARIMAX vencedora do script 02, para que
+    # as duas famílias de modelos leiam a mesma variável da mesma maneira.
+    # `where(conhecido)` preserva o NaN dos 62 dias anteriores ao primeiro tag: um valor
+    # desconhecido nunca pode ser codificado como merge window.
+    semanas_release = df["weeks_since_release"].astype("float64")
+    release_conhecido = semanas_release.notna()
+    df["fase_rc_inicial"] = ((semanas_release >= 2) & (semanas_release <= 5)).where(release_conhecido).astype("float64")
+    df["fase_rc_final"] = (semanas_release >= 6).where(release_conhecido).astype("float64")
+
     # Colunas de características para o regime multivariado
     features_mult = [
         "total_commits",
@@ -95,10 +120,20 @@ def carregar_dados_e_preparar() -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
         "cos_7_1",
     ]
 
+    # Terceiro regime: as mesmas seis colunas mais a fase do ciclo de release (F=8)
+    features_release = features_mult + ["fase_rc_inicial", "fase_rc_final"]
+
     # Divisão estritamente cronológica 80:20 (sem baralhar)
     train, test = dividir_treino_teste(df, "dias")
 
-    return train, test, features_mult
+    # Os 62 dias anteriores ao primeiro tag não têm fase conhecida. São retirados da
+    # amostra de treino para todos os regimes: se só o regime F=8 os perdesse, os outros
+    # treinariam com mais 62 janelas e a comparação entre regimes deixaria de ser justa.
+    # O conjunto de teste (2022-2026) não tem valores em falta, pelo que não é afetado.
+    train = train.dropna(subset=["fase_rc_inicial"])
+    print(f"    -> Treino após remover os dias sem fase de release conhecida: {len(train)} dias")
+
+    return train, test, features_mult, features_release
 
 
 # Formulação por Janelas Deslizantes (Sliding Windows, Slide 85)
@@ -121,48 +156,52 @@ def preparar_janelas_deslizantes(
     train: pd.DataFrame,
     test: pd.DataFrame,
     features_mult: list[str],
+    features_release: list[str],
     window_size: int = 28,
-) -> tuple[
-    tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
-    tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
-    MinMaxScaler,
-]:
-    """Aplica normalização e constrói janelas deslizantes univariadas e multivariadas.
+) -> tuple[dict[str, DadosJanela], MinMaxScaler]:
+    """Aplica normalização e constrói as janelas deslizantes dos três regimes.
 
-    O ajuste do MinMaxScaler é feito exclusivamente no treino para prevenir data leakage.
+    O ajuste de cada MinMaxScaler é feito exclusivamente no treino para prevenir data
+    leakage. Há um scaler por regime porque os regimes têm conjuntos de colunas diferentes.
     """
     print(f"[*] A construir janelas deslizantes (W={window_size} dias)...")
 
-    scaler_X = MinMaxScaler(feature_range=(0, 1))
+    # Alvo normalizado, partilhado pelos três regimes
     scaler_y = MinMaxScaler(feature_range=(0, 1))
-
-    train_scaled = scaler_X.fit_transform(train[features_mult])
-    test_scaled = scaler_X.transform(test[features_mult])
-
-    # Normalizar a variável alvo (total_commits) para o regime univariado
     train_scaled_y = scaler_y.fit_transform(train[["total_commits"]])
     test_scaled_y = scaler_y.transform(test[["total_commits"]])
 
-    # Regime Univariado (F=1)
+    # Regime Univariado (F=1): apenas o histórico de commits
     X_train_uni, y_train_uni = criar_janelas_deslizantes(train_scaled_y, window_size)
     X_test_uni, y_test_uni = criar_janelas_deslizantes(test_scaled_y, window_size)
-
-    # Regime Multivariado (F=6)
-    X_train_multi, y_train_multi = criar_janelas_deslizantes(train_scaled, window_size)
-    X_test_multi, y_test_multi = criar_janelas_deslizantes(test_scaled, window_size)
-
+    dados: dict[str, DadosJanela] = {
+        "Univariado": (X_train_uni, y_train_uni, X_test_uni, y_test_uni),
+    }
     print(f"    -> Regime Univariado: X_train={X_train_uni.shape}, X_test={X_test_uni.shape}")
-    print(f"    -> Regime Multivariado: X_train={X_train_multi.shape}, X_test={X_test_multi.shape}")
 
-    dados_uni = (X_train_uni, y_train_uni, X_test_uni, y_test_uni)
-    dados_multi = (X_train_multi, y_train_multi, X_test_multi, y_test_multi)
+    # Regimes multivariados: mudam apenas as colunas de entrada
+    colunas_por_regime = {
+        "Multivariado": features_mult,
+        "Multivariado + Release": features_release,
+    }
 
-    return dados_uni, dados_multi, scaler_y
+    for rotulo, colunas in colunas_por_regime.items():
+        scaler_X = MinMaxScaler(feature_range=(0, 1)).fit(train[colunas])
+        X_train_multi, y_train_multi = criar_janelas_deslizantes(scaler_X.transform(train[colunas]), window_size)
+        X_test_multi, y_test_multi = criar_janelas_deslizantes(scaler_X.transform(test[colunas]), window_size)
+        dados[rotulo] = (X_train_multi, y_train_multi, X_test_multi, y_test_multi)
+        print(
+            f"    -> Regime {rotulo} (F={X_train_multi.shape[2]}): "
+            f"X_train={X_train_multi.shape}, X_test={X_test_multi.shape}"
+        )
+
+    return dados, scaler_y
 
 
 # Treino e Avaliação de Modelos Neuronais (Slide 80, 108)
 def treinar_e_avaliar_modelo(
     nome_modelo: str,
+    regime: str,
     modelo: nn.Module,
     X_train: np.ndarray,
     y_train: np.ndarray,
@@ -237,7 +276,7 @@ def treinar_e_avaliar_modelo(
 
     df_historico = pd.DataFrame({
         "Modelo": nome_modelo,
-        "Regime": "Univariado (F=1)" if "Univariado" in nome_modelo else "Multivariado (F=6)",
+        "Regime": regime,
         "Época": list(range(1, epochs + 1)),
         "Train_Loss": np.round(train_losses, 6),
         "Val_Loss": np.round(val_losses, 6),
@@ -255,100 +294,71 @@ def treinar_e_avaliar_modelo(
 
 # Treino de modelos
 def treinar_modelos(
-    dados_uni: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
-    dados_multi: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+    dados_por_regime: dict[str, DadosJanela],
     scaler_y: MinMaxScaler,
     window_size: int = 28,
     epochs: int = 15,
 ) -> tuple[dict, dict, dict]:
-    """Instancia, treina e avalia as 4 arquiteturas neuronais nos regimes univariado e multivariado."""
+    """Instancia, treina e avalia as 4 arquiteturas nos três regimes de features."""
     print("\n[*] A treinar modelos de Aprendizagem Profunda...")
 
-    X_train_uni, y_train_uni, X_test_uni, y_test_uni = dados_uni
-    X_train_multi, y_train_multi, X_test_multi, y_test_multi = dados_multi
+    construtores = {
+        "1D-CNN": lambda n: CNN1D(n_features=n, window_size=window_size),
+        "SimpleRNN": lambda n: SimpleRNNModel(n_features=n, hidden_size=50),
+        "LSTM": lambda n: LSTMModel(n_features=n, hidden_size=50),
+        "GRU": lambda n: GRUModel(n_features=n, hidden_size=50),
+    }
 
     resultados = {}
     hist_loss = {}
     previsoes_teste = {}
     historicos = []
 
-    # --- Regime Univariado ---
-    print("\n--- Regime Univariado (F=1: apenas total_commits) ---")
+    for rotulo in REGIMES:
+        X_train, y_train, X_test, y_test = dados_por_regime[rotulo]
+        n_features = X_train.shape[2]
+        rotulo_regime = f"{rotulo} (F={n_features})"
 
-    modelos_uni = {
-        "1D-CNN Univariado": CNN1D(n_features=1, window_size=window_size),
-        "SimpleRNN Univariado": SimpleRNNModel(n_features=1, hidden_size=50),
-        "LSTM Univariado": LSTMModel(n_features=1, hidden_size=50),
-        "GRU Univariado": GRUModel(n_features=1, hidden_size=50),
-    }
+        print(f"\n--- Regime {rotulo_regime} ---")
 
-    for nome, modelo in modelos_uni.items():
-        res = treinar_e_avaliar_modelo(
-            nome,
-            modelo,
-            X_train_uni,
-            y_train_uni,
-            X_test_uni,
-            y_test_uni,
-            scaler_y,
-            epochs=epochs,
-            batch_size=64,
-            lr=0.001,
-        )
-        resultados[nome] = res["metricas"]
-        hist_loss[nome] = {"train": res["train_losses"], "val": res["val_losses"]}
-        previsoes_teste[nome] = {"pred": res["previsoes"], "real": res["y_real"]}
-        historicos.append(res["historico"])
+        # Repor a seed no início de cada regime: como as arquiteturas são construídas na
+        # mesma ordem, cada uma arranca dos mesmos pesos nos três regimes e a diferença
+        # de métricas mede o efeito das features, não o sorteio da inicialização.
+        torch.manual_seed(SEED)
 
-    # --- Regime Multivariado ---
-    print("\n--- Regime Multivariado (F=6: total_commits + exógenas + harmónicas) ---")
-
-    modelos_multi = {
-        "1D-CNN Multivariado": CNN1D(n_features=6, window_size=window_size),
-        "SimpleRNN Multivariado": SimpleRNNModel(n_features=6, hidden_size=50),
-        "LSTM Multivariado": LSTMModel(n_features=6, hidden_size=50),
-        "GRU Multivariado": GRUModel(n_features=6, hidden_size=50),
-    }
-
-    for nome, modelo in modelos_multi.items():
-        res = treinar_e_avaliar_modelo(
-            nome,
-            modelo,
-            X_train_multi,
-            y_train_multi,
-            X_test_multi,
-            y_test_multi,
-            scaler_y,
-            epochs=epochs,
-            batch_size=64,
-            lr=0.001,
-        )
-        resultados[nome] = res["metricas"]
-        hist_loss[nome] = {"train": res["train_losses"], "val": res["val_losses"]}
-        previsoes_teste[nome] = {"pred": res["previsoes"], "real": res["y_real"]}
-        historicos.append(res["historico"])
+        for nome_arquitetura, construtor in construtores.items():
+            nome = f"{nome_arquitetura} {rotulo}"
+            res = treinar_e_avaliar_modelo(
+                nome,
+                rotulo_regime,
+                construtor(n_features),
+                X_train,
+                y_train,
+                X_test,
+                y_test,
+                scaler_y,
+                epochs=epochs,
+                batch_size=64,
+                lr=0.001,
+            )
+            resultados[nome] = res["metricas"]
+            hist_loss[nome] = {"train": res["train_losses"], "val": res["val_losses"]}
+            previsoes_teste[nome] = {"pred": res["previsoes"], "real": res["y_real"]}
+            historicos.append(res["historico"])
 
     registos = []
-    for nome in modelos_uni:
-        m = resultados[nome]
-        registos.append({
-            "Modelo": nome,
-            "Regime": "Univariado (F=1)",
-            "REQM": m["REQM"],
-            "EAM": m["EAM"],
-            "EPAM (%)": m["EPAM"],
-            "EPAMs (%)": m["EPAMs"],
-        })
-    for nome in modelos_multi:
-        m = resultados[nome]
-        registos.append({
-            "Modelo": nome,
-            "Regime": "Multivariado (F=6)",
-            "REQM": m["REQM"],
-            "EAM": m["EAM"],
-            "EPAM (%)": m["EPAM"],
-            "EPAMs (%)": m["EPAMs"],
-        })
+    for rotulo in REGIMES:
+        rotulo_regime = f"{rotulo} (F={dados_por_regime[rotulo][0].shape[2]})"
+        for nome_arquitetura in construtores:
+            m = resultados[f"{nome_arquitetura} {rotulo}"]
+            registos.append({
+                "Modelo": f"{nome_arquitetura} {rotulo}",
+                "Regime": rotulo_regime,
+                "REQM": m["REQM"],
+                "EAM": m["EAM"],
+                "EPAM (%)": m["EPAM"],
+                "EPAMs (%)": m["EPAMs"],
+            })
 
     df_dl = pd.DataFrame(registos)
     guardar_tabela(df_dl, "deep_learning", "Tabela de Deep Learning")
@@ -360,257 +370,159 @@ def treinar_modelos(
 
 
 # Geração de Tabelas (tab_06 e tab_07)
-def gerar_tabelas_dl(resultados: dict, window_size: int = 28, epochs: int = 15) -> None:
+def gerar_tabelas_dl(
+    resultados: dict,
+    dados_por_regime: dict[str, DadosJanela],
+    window_size: int = 28,
+    epochs: int = 15,
+) -> None:
     """Gera e grava a tabela de hiperparâmetros (tab_06) e a tabela de métricas (tab_07)."""
     print("\n[*] A gravar tabela de hiperparâmetros (tab_06_arquiteturas_dl.csv)...")
-    tabela_hp = pd.DataFrame([
-        {
-            "Modelo": "1D-CNN",
-            "Regime": "Univariado (F=1)",
-            "Camadas": "Conv1D(32, k=3) + MaxPool + Conv1D(64, k=3) + MaxPool + Dense(64) + Dropout(0.2) + Dense(1)",
-            "Neurónios": "32 + 64 + 64",
-            "Janela W": window_size,
-            "Batch Size": 64,
-            "Taxa de Aprendizagem": 0.001,
-            "Otimizador": "Adam",
-            "Função de Perda": "MSE",
-            "Épocas": epochs,
-        },
-        {
-            "Modelo": "1D-CNN",
-            "Regime": "Multivariado (F=6)",
-            "Camadas": "Conv1D(32, k=3) + MaxPool + Conv1D(64, k=3) + MaxPool + Dense(64) + Dropout(0.2) + Dense(1)",
-            "Neurónios": "32 + 64 + 64",
-            "Janela W": window_size,
-            "Batch Size": 64,
-            "Taxa de Aprendizagem": 0.001,
-            "Otimizador": "Adam",
-            "Função de Perda": "MSE",
-            "Épocas": epochs,
-        },
-        {
-            "Modelo": "SimpleRNN",
-            "Regime": "Univariado (F=1)",
-            "Camadas": "RNN(50) + Dense(1)",
-            "Neurónios": "50",
-            "Janela W": window_size,
-            "Batch Size": 64,
-            "Taxa de Aprendizagem": 0.001,
-            "Otimizador": "Adam",
-            "Função de Perda": "MSE",
-            "Épocas": epochs,
-        },
-        {
-            "Modelo": "SimpleRNN",
-            "Regime": "Multivariado (F=6)",
-            "Camadas": "RNN(50) + Dense(1)",
-            "Neurónios": "50",
-            "Janela W": window_size,
-            "Batch Size": 64,
-            "Taxa de Aprendizagem": 0.001,
-            "Otimizador": "Adam",
-            "Função de Perda": "MSE",
-            "Épocas": epochs,
-        },
-        {
-            "Modelo": "LSTM",
-            "Regime": "Univariado (F=1)",
-            "Camadas": "LSTM(50) + Dense(1)",
-            "Neurónios": "50",
-            "Janela W": window_size,
-            "Batch Size": 64,
-            "Taxa de Aprendizagem": 0.001,
-            "Otimizador": "Adam",
-            "Função de Perda": "MSE",
-            "Épocas": epochs,
-        },
-        {
-            "Modelo": "LSTM",
-            "Regime": "Multivariado (F=6)",
-            "Camadas": "LSTM(50) + Dense(1)",
-            "Neurónios": "50",
-            "Janela W": window_size,
-            "Batch Size": 64,
-            "Taxa de Aprendizagem": 0.001,
-            "Otimizador": "Adam",
-            "Função de Perda": "MSE",
-            "Épocas": epochs,
-        },
-        {
-            "Modelo": "GRU",
-            "Regime": "Univariado (F=1)",
-            "Camadas": "GRU(50) + Dense(1)",
-            "Neurónios": "50",
-            "Janela W": window_size,
-            "Batch Size": 64,
-            "Taxa de Aprendizagem": 0.001,
-            "Otimizador": "Adam",
-            "Função de Perda": "MSE",
-            "Épocas": epochs,
-        },
-        {
-            "Modelo": "GRU",
-            "Regime": "Multivariado (F=6)",
-            "Camadas": "GRU(50) + Dense(1)",
-            "Neurónios": "50",
-            "Janela W": window_size,
-            "Batch Size": 64,
-            "Taxa de Aprendizagem": 0.001,
-            "Otimizador": "Adam",
-            "Função de Perda": "MSE",
-            "Épocas": epochs,
-        },
-    ])
-    guardar_tabela(tabela_hp, "tab_06_arquiteturas_dl")
+
+    # Especificação fixa de cada arquitetura. Cada linha é replicada pelos três regimes,
+    # porque o que muda entre regimes é o número de features de entrada, não a rede.
+    especificacoes = {
+        "1D-CNN": (
+            "Conv1D(32, k=3) + MaxPool + Conv1D(64, k=3) + MaxPool + Dense(64) + Dropout(0.2) + Dense(1)",
+            "32 + 64 + 64",
+        ),
+        "SimpleRNN": ("RNN(50) + Dense(1)", "50"),
+        "LSTM": ("LSTM(50) + Dense(1)", "50"),
+        "GRU": ("GRU(50) + Dense(1)", "50"),
+    }
+
+    linhas_hp = []
+    linhas_benchmark = []
+
+    for rotulo in REGIMES:
+        n_features = dados_por_regime[rotulo][0].shape[2]
+        rotulo_regime = f"{rotulo} (F={n_features})"
+
+        for nome_arquitetura, (camadas, neuronios) in especificacoes.items():
+            nome = f"{nome_arquitetura} {rotulo}"
+            linhas_hp.append({
+                "Modelo": nome_arquitetura,
+                "Regime": rotulo_regime,
+                "Features de Entrada (F)": n_features,
+                "Camadas": camadas,
+                "Neurónios": neuronios,
+                "Janela W": window_size,
+                "Batch Size": 64,
+                "Taxa de Aprendizagem": 0.001,
+                "Otimizador": "Adam",
+                "Função de Perda": "MSE",
+                "Épocas": epochs,
+                "Seed": SEED,
+            })
+            linhas_benchmark.append({"Modelo": nome, "Regime": rotulo_regime, **resultados[nome]})
+
+    guardar_tabela(pd.DataFrame(linhas_hp), "tab_06_arquiteturas_dl")
 
     print("[*] A gravar tabela de benchmark (tab_07_dl_benchmark_metricas.csv)...")
-    tabela_benchmark = pd.DataFrame(
-        [
-            {"Modelo": nome, "Regime": "Univariado (F=1)", **resultados[nome]}
-            for nome in ["1D-CNN Univariado", "SimpleRNN Univariado", "LSTM Univariado", "GRU Univariado"]
-        ]
-        + [
-            {"Modelo": nome, "Regime": "Multivariado (F=6)", **resultados[nome]}
-            for nome in ["1D-CNN Multivariado", "SimpleRNN Multivariado", "LSTM Multivariado", "GRU Multivariado"]
-        ]
-    )
-    guardar_tabela(tabela_benchmark, "tab_07_dl_benchmark_metricas")
+    guardar_tabela(pd.DataFrame(linhas_benchmark), "tab_07_dl_benchmark_metricas")
 
 
 # Geração de Figura (fig_06)
 def criar_figura_curvas_aprendizagem(hist_loss: dict) -> None:
     """Gera o painel de curvas de aprendizagem (Loss Treino vs. Validação)."""
     print("[*] A gerar curvas de aprendizagem (fig_06_curvas_aprendizagem)...")
-    fig, axes = plt.subplots(2, 4, figsize=(18, 8))
+    arquiteturas = ["1D-CNN", "SimpleRNN", "LSTM", "GRU"]
+
+    fig, axes = plt.subplots(len(REGIMES), len(arquiteturas), figsize=(18, 3.6 * len(REGIMES)))
     fig.suptitle(
         "Curvas de Aprendizagem (Loss de Treino vs. Validação) — Aula #5 (Slide 80 e 94)\n"
-        "ISEG — Time Series Forecasting — 1D-CNN, SimpleRNN, LSTM e GRU",
+        "ISEG — Time Series Forecasting — 1D-CNN, SimpleRNN, LSTM e GRU nos três regimes de features",
         fontsize=13,
         fontweight="bold",
         y=1.01,
     )
 
-    for idx, nome in enumerate(["1D-CNN Univariado", "SimpleRNN Univariado", "LSTM Univariado", "GRU Univariado"]):
-        ax = axes[0, idx]
-        ax.plot(hist_loss[nome]["train"], color="#1f77b4", lw=1.2, label="Treino (MSE)")
-        ax.plot(hist_loss[nome]["val"], color="#d62728", lw=1.2, linestyle="--", label="Validação (MSE)")
-        ax.set_title(nome.replace(" Univariado", ""), loc="left", fontweight="bold", fontsize=10)
-        ax.set_ylabel("MSE")
-        ax.set_xlabel("Época")
-        ax.legend(loc="upper right", fontsize=8)
-        ax.grid(True, alpha=0.5)
-
-    for idx, nome in enumerate([
-        "1D-CNN Multivariado",
-        "SimpleRNN Multivariado",
-        "LSTM Multivariado",
-        "GRU Multivariado",
-    ]):
-        ax = axes[1, idx]
-        ax.plot(hist_loss[nome]["train"], color="#1f77b4", lw=1.2, label="Treino (MSE)")
-        ax.plot(hist_loss[nome]["val"], color="#d62728", lw=1.2, linestyle="--", label="Validação (MSE)")
-        ax.set_title(nome.replace(" Multivariado", ""), loc="left", fontweight="bold", fontsize=10)
-        ax.set_ylabel("MSE")
-        ax.set_xlabel("Época")
-        ax.legend(loc="upper right", fontsize=8)
-        ax.grid(True, alpha=0.5)
+    for linha, rotulo in enumerate(REGIMES):
+        for coluna, arquitetura in enumerate(arquiteturas):
+            ax = axes[linha, coluna]
+            nome = f"{arquitetura} {rotulo}"
+            ax.plot(hist_loss[nome]["train"], color="#1f77b4", lw=1.2, label="Treino (MSE)")
+            ax.plot(hist_loss[nome]["val"], color="#d62728", lw=1.2, linestyle="--", label="Validação (MSE)")
+            ax.set_title(f"{arquitetura} — {rotulo}", loc="left", fontweight="bold", fontsize=10)
+            ax.set_ylabel("MSE")
+            ax.set_xlabel("Época")
+            ax.legend(loc="upper right", fontsize=8)
+            ax.grid(True, alpha=0.5)
 
     plt.tight_layout()
     guardar_figura(fig, "fig_06_curvas_aprendizagem")
 
 
-# Geração de previsões Univariadas vs Multivariadas (fig_07)
+# Geração de previsões por regime (fig_07)
 def criar_figura_previsoes_teste(
     test: pd.DataFrame,
     previsoes_teste: dict,
     resultados: dict,
+    dimensoes: dict[str, int],
     window_size: int = 28,
 ) -> None:
-    """Gera o painel duplo de previsões out-of-sample: Univariado vs. Multivariado."""
+    """Gera um painel por regime de features com as previsões out-of-sample das 4 arquiteturas."""
     print("[*] A gerar previsões no período de teste (fig_07_previsoes_dl_teste)...")
-    fig, axes = plt.subplots(2, 1, figsize=(14, 10))
+    arquiteturas = [
+        ("1D-CNN", "#ff7f0e", ":"),
+        ("SimpleRNN", "#9467bd", "-."),
+        ("LSTM", "#1f77b4", "--"),
+        ("GRU", "#2ca02c", "-"),
+    ]
+
+    # O alvo é o mesmo nos três regimes, por isso a série observada é plotada uma vez por painel
+    y_real = previsoes_teste[f"GRU {REGIMES[0]}"]["real"]
+
+    descricao_regime = {
+        "Univariado": "Apenas Histórico de Commits Diários",
+        "Multivariado": "Commits + Contribuidores + Code Churn + Files + Harmónicas ($s=7$)",
+        "Multivariado + Release": "O anterior + Fase do Ciclo de Release",
+    }
+
+    fig, axes = plt.subplots(len(REGIMES), 1, figsize=(14, 4.6 * len(REGIMES)))
     fig.suptitle(
-        "Previsões Out-of-Sample (Daily) — Deep Learning: Univariado vs. Multivariado\n"
+        "Previsões Out-of-Sample (Daily) — Deep Learning por Regime de Features\n"
         "ISEG — Time Series Forecasting — Aula #5 (Slides 106-108)",
         fontsize=13,
         fontweight="bold",
-        y=1.01,
+        y=1.005,
     )
 
-    # Painel 1: Univariado
-    ax1 = axes[0]
-    y_real = previsoes_teste["GRU Univariado"]["real"]
-    ax1.plot(
-        test.index[window_size:],
-        y_real,
-        color="black",
-        lw=1.8,
-        label=r"Observado Real ($Y_{d,t}$)",
-        zorder=5,
-    )
-    for nome, cor, estilo in [
-        ("1D-CNN Univariado", "#ff7f0e", ":"),
-        ("SimpleRNN Univariado", "#9467bd", "-."),
-        ("LSTM Univariado", "#1f77b4", "--"),
-        ("GRU Univariado", "#2ca02c", "-"),
-    ]:
-        p = previsoes_teste[nome]["pred"]
-        epam = resultados[nome]["EPAM"]
-        ax1.plot(
+    for ax, rotulo in zip(axes, REGIMES):
+        # A série observada fica em cinza translúcido no fundo: desenhada a preto e a
+        # traço grosso por cima das previsões, tapava-as e tornava o painel ilegível.
+        ax.plot(
             test.index[window_size:],
-            p,
-            color=cor,
-            linestyle=estilo,
-            lw=1.3,
-            label=f"{nome.replace(' Univariado', '')} (EPAM: {epam:.1f}%)",
+            y_real,
+            color="#555555",
+            lw=0.9,
+            alpha=0.55,
+            label=r"Observado Real ($Y_{d,t}$)",
+            zorder=2,
         )
-    ax1.set_title(
-        "Regime Univariado (F=1): Apenas Histórico de Commits Diários",
-        loc="left",
-        fontweight="bold",
-    )
-    ax1.set_ylabel("Commits diários")
-    ax1.set_xlabel("Data")
-    ax1.legend(loc="upper left", framealpha=0.9)
-    ax1.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
-    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
-
-    # Painel 2: Multivariado
-    ax2 = axes[1]
-    ax2.plot(
-        test.index[window_size:],
-        y_real,
-        color="black",
-        lw=1.8,
-        label=r"Observado Real ($Y_{d,t}$)",
-        zorder=5,
-    )
-    for nome, cor, estilo in [
-        ("1D-CNN Multivariado", "#ff7f0e", ":"),
-        ("SimpleRNN Multivariado", "#9467bd", "-."),
-        ("LSTM Multivariado", "#1f77b4", "--"),
-        ("GRU Multivariado", "#2ca02c", "-"),
-    ]:
-        p = previsoes_teste[nome]["pred"]
-        epam = resultados[nome]["EPAM"]
-        ax2.plot(
-            test.index[window_size:],
-            p,
-            color=cor,
-            linestyle=estilo,
-            lw=1.3,
-            label=f"{nome.replace(' Multivariado', '')} (EPAM: {epam:.1f}%)",
+        for arquitetura, cor, estilo in arquiteturas:
+            nome = f"{arquitetura} {rotulo}"
+            p = previsoes_teste[nome]["pred"]
+            epam = resultados[nome]["EPAM"]
+            ax.plot(
+                test.index[window_size:],
+                p,
+                color=cor,
+                linestyle=estilo,
+                lw=1.2,
+                label=f"{arquitetura} (EPAM: {epam:.1f}%)",
+                zorder=3,
+            )
+        ax.set_title(
+            f"Regime {rotulo} (F={dimensoes[rotulo]}): {descricao_regime[rotulo]}",
+            loc="left",
+            fontweight="bold",
         )
-    ax2.set_title(
-        "Regime Multivariado (F=6): Commits + Contribuidores + Code Churn + Files + Harmónicas ($s=7$)",
-        loc="left",
-        fontweight="bold",
-    )
-    ax2.set_ylabel("Commits diários")
-    ax2.set_xlabel("Data")
-    ax2.legend(loc="upper left", framealpha=0.9)
-    ax2.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
-    ax2.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+        ax.set_ylabel("Commits diários")
+        ax.set_xlabel("Data")
+        ax.legend(loc="upper left", framealpha=0.9)
+        ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
 
     plt.tight_layout()
     guardar_figura(fig, "fig_07_previsoes_dl_teste")
@@ -625,22 +537,42 @@ def exportar_resumo_dl(resultados: dict) -> None:
     melhor_modelo = min(resultados, key=lambda k: resultados[k]["REQM"])
     melhor_metricas = resultados[melhor_modelo]
 
-    # Comparação Univariado vs Multivariado para a mesma arquitetura
+    arquiteturas = ["1D-CNN", "SimpleRNN", "LSTM", "GRU"]
+
+    # Comparação por arquitetura: univariado -> multivariado -> multivariado + release
     comparacao_uni_multi = ""
-    for arch in ["1D-CNN", "SimpleRNN", "LSTM", "GRU"]:
-        uni_reqm = resultados[f"{arch} Univariado"]["REQM"]
-        multi_reqm = resultados[f"{arch} Multivariado"]["REQM"]
-        uni_epam = resultados[f"{arch} Univariado"]["EPAM"]
-        multi_epam = resultados[f"{arch} Multivariado"]["EPAM"]
-        ganho = ((uni_reqm - multi_reqm) / uni_reqm) * 100
+    comparacao_release = ""
+    ganhos_release = []
+
+    for arch in arquiteturas:
+        uni = resultados[f"{arch} Univariado"]
+        multi = resultados[f"{arch} Multivariado"]
+        release = resultados[f"{arch} Multivariado + Release"]
+
+        ganho_multi = ((uni["REQM"] - multi["REQM"]) / uni["REQM"]) * 100
+        ganho_release = ((multi["REQM"] - release["REQM"]) / multi["REQM"]) * 100
+        ganhos_release.append(ganho_release)
+
         comparacao_uni_multi += (
-            f"  * **{arch}:** Univariado REQM={uni_reqm:.2f} (EPAM={uni_epam:.2f}%) "
-            f"vs. Multivariado REQM={multi_reqm:.2f} (EPAM={multi_epam:.2f}%) "
-            f"-> Ganho de {ganho:+.1f}%\n"
+            f"  * **{arch}:** Univariado REQM={uni['REQM']:.2f} (EPAM={uni['EPAM']:.2f}%) "
+            f"vs. Multivariado REQM={multi['REQM']:.2f} (EPAM={multi['EPAM']:.2f}%) "
+            f"-> Ganho de {ganho_multi:+.1f}%\n"
         )
+        comparacao_release += (
+            f"  * **{arch}:** Multivariado REQM={multi['REQM']:.2f} "
+            f"vs. Multivariado + Release REQM={release['REQM']:.2f} "
+            f"-> Ganho de {ganho_release:+.1f}% (EPAM {multi['EPAM']:.2f}% -> {release['EPAM']:.2f}%)\n"
+        )
+
+    efeito_release = (
+        f"a fase do ciclo de release melhora o REQM em média {np.mean(ganhos_release):.1f}% "
+        f"(entre {np.min(ganhos_release):+.1f}% e {np.max(ganhos_release):+.1f}% nas quatro arquiteturas)"
+    )
 
     contexto: dict[str, object] = {
         "comparacao_uni_multi": comparacao_uni_multi.rstrip("\n"),
+        "comparacao_release": comparacao_release.rstrip("\n"),
+        "efeito_release": efeito_release,
         "melhor_modelo": melhor_modelo,
         "melhor_reqm": f"{melhor_metricas['REQM']:.2f}",
         "melhor_epam": f"{melhor_metricas['EPAM']:.2f}",
@@ -656,14 +588,17 @@ def main():
     EPOCHS = 15
 
     iniciar_script("03", "APRENDIZAGEM PROFUNDA (DEEP LEARNING)")
-    train, test, features_mult = carregar_dados_e_preparar()
-    dados_uni, dados_multi, scaler_y = preparar_janelas_deslizantes(train, test, features_mult, window_size=WINDOW_SIZE)
-    resultados, hist_loss, previsoes_teste = treinar_modelos(
-        dados_uni, dados_multi, scaler_y, window_size=WINDOW_SIZE, epochs=EPOCHS
+    train, test, features_mult, features_release = carregar_dados_e_preparar()
+    dados_por_regime, scaler_y = preparar_janelas_deslizantes(
+        train, test, features_mult, features_release, window_size=WINDOW_SIZE
     )
-    gerar_tabelas_dl(resultados, window_size=WINDOW_SIZE, epochs=EPOCHS)
+    resultados, hist_loss, previsoes_teste = treinar_modelos(
+        dados_por_regime, scaler_y, window_size=WINDOW_SIZE, epochs=EPOCHS
+    )
+    dimensoes = {rotulo: dados_por_regime[rotulo][0].shape[2] for rotulo in REGIMES}
+    gerar_tabelas_dl(resultados, dados_por_regime, window_size=WINDOW_SIZE, epochs=EPOCHS)
     criar_figura_curvas_aprendizagem(hist_loss)
-    criar_figura_previsoes_teste(test, previsoes_teste, resultados, window_size=WINDOW_SIZE)
+    criar_figura_previsoes_teste(test, previsoes_teste, resultados, dimensoes, window_size=WINDOW_SIZE)
     exportar_resumo_dl(resultados)
     finalizar_script("03")
 

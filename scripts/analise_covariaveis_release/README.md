@@ -116,7 +116,7 @@ AIC em **40.6 pontos**, com duas exógenas adicionais. Os números em bruto est�
 - `scripts/01_eda_decomposition.py`: as três variáveis passaram a entrar na matriz de correlação
   (`fig_00_matriz_correlacao_pearson` e `fig_00_matriz_correlacao_spearman`, bloco do ciclo de
   release delimitado a preto).
-- Script 03 (deep learning) não usa estas variáveis e não foi alterado.
+- Script 03 (deep learning, série diária) usa as mesmas duas dummies como terceiro regime de features — ver a Secção 9.
 
 ## 7. Limitações a declarar
 
@@ -152,11 +152,84 @@ O script imprime a tabela da Secção 4 e regrava `resultados_experimento.csv`. 
 determinísticos e coincidem com os do script 02 para a especificação adotada (REQM 254.00, AIC
 11423.96).
 
+O experimento de deep learning é independente e mais lento (cerca de 6 minutos, 20 treinos):
+
+```bash
+uv run scripts/analise_covariaveis_release/experimento_release_dl.py
+```
+
 Para regenerar os artefactos do relatório afetados:
 
 ```bash
 uv run scripts/02_classical_econometrics.py
+uv run scripts/03_deep_learning.py
 uv run scripts/04_benchmark_consolidado.py
 ```
 
-O script 03 não precisa de ser re-executado: não usa estas variáveis.
+## 9. Aplicação no ramo de deep learning (script 03)
+
+A série usada pelas redes é a **diária** (7.815 dias), com janela de 28 dias e alvo em commits
+diários. A fase é a mesma variável, com a mesma codificação (duas dummies, *merge window* como
+referência), como **terceiro regime de features** ao lado do univariado (F=1) e do multivariado
+(F=6). Duas decisões específicas desta frequência:
+
+- **Amostra de treino comum.** Os 62 dias anteriores ao primeiro *tag* não têm fase conhecida e
+  são removidos do treino em **todos** os regimes, ficando 6.190 dias (6.162 janelas). Se só o
+  regime F=8 os perdesse, os outros treinariam com mais 62 janelas e a comparação deixaria de ser
+  justa. O conjunto de teste (1.563 dias, 2022-2026) não tem valores em falta.
+- **Seed.** `torch.manual_seed(42)` reposta no início de cada regime, para que a mesma
+  arquitetura arranque dos mesmos pesos nos três regimes. Sem isso, a diferença entre F=6 e F=8
+  confundir-se-ia com o sorteio da inicialização.
+
+### 9.1 Escolha da codificação (LSTM, 5 seeds)
+
+Quatro conjuntos de features, mesma semente por variante, média e desvio-padrão em 5 seeds:
+
+| Features | F | REQM | EAM | EPAM | EPAMs |
+|---|---:|---|---|---|---|
+| Sem a fase | 6 | 130.29 ± 0.17 | 79.88 ± 0.47 | 61.71 ± 1.61 | 37.47 ± 0.26 |
+| Só `weeks_since_release` | 7 | 130.35 ± 0.20 | 80.33 ± 0.31 | 63.74 ± 1.43 | 37.53 ± 0.04 |
+| `weeks_since_release` + `is_merge_window` | 8 | 128.80 ± 0.17 | 78.72 ± 0.40 | 60.29 ± 1.05 | 37.45 ± 0.46 |
+| Duas dummies (adotada) | 8 | **127.56 ± 0.18** | **78.37 ± 0.65** | 64.80 ± 2.00 | **36.91 ± 0.28** |
+
+A variabilidade entre seeds é de ±0.2 no REQM, uma ordem de grandeza abaixo das diferenças em
+causa, pelo que estas não são ruído de inicialização. Leitura:
+
+- **A contagem sozinha não serve.** `weeks_since_release` isolada não melhora nada (130.35 contra
+  130.29): a rede já vê o nível das últimas quatro semanas na janela e não consegue extrair do
+  contador uma informação que não esteja lá.
+- **As duas codificações com a flag/estrutura de fase funcionam**, e a diferença entre elas é
+  pequena mas consistente: as dummies ganham no REQM (127.56 contra 128.80), no EAM e no sMAPE, e
+  perdem no EPAM (64.80 contra 60.29).
+- **Adotaram-se as dummies** por duas razões: são a codificação da especificação ARIMAX
+  vencedora, o que permite dizer no relatório que as duas famílias leem a mesma variável da mesma
+  forma; e o REQM é o critério de seleção usado em todo o trabalho. A perda no EPAM fica
+  declarada — o EPAM é instável nesta frequência porque muitos dias têm poucos commits.
+
+`experimento_release_dl.py` reproduz esta tabela e grava `resultados_experimento_dl.csv` com as
+quatro métricas (REQM, EAM, EPAM e EPAMs) por variante.
+
+### 9.2 Resultado no pipeline (`tab_07`)
+
+12 redes, 15 épocas, $\mathrm{seed} = 42$, REQM fora da amostra no mesmo período de teste.
+
+| Arquitetura | F=1 | F=6 | F=8 (com a fase) | Ganho F=6 → F=8 |
+|---|---:|---:|---:|---:|
+| 1D-CNN | 149.84 | 130.26 | **125.68** | +3.5% |
+| SimpleRNN | 142.13 | 136.31 | 132.69 | +2.7% |
+| LSTM | 164.68 | 129.94 | 126.99 | +2.3% |
+| GRU | 143.21 | 132.15 | 127.49 | +3.5% |
+
+- **A fase melhora as quatro arquiteturas**, em média 3.0% de REQM, e o melhor modelo de deep
+  learning passa a ser o `1D-CNN Multivariado + Release` (125.68), à frente do melhor modelo sem
+  a fase na mesma execução (`LSTM Multivariado`, 129.94).
+- **O ganho é muito menor do que o do bloco de autores e churn** (13% a 21%), e isso é o esperado:
+  a fase descreve o calendário, não a intensidade do trabalho.
+- **Em erro absoluto melhora em todas**: o EAM cai nas quatro arquiteturas. Em erro relativo é o
+  contrário: o EPAM **piora** nas quatro (por exemplo, 54.67% → 58.20% na 1D-CNN), e o sMAPE é
+  misto. A escolha é feita pelo REQM, como em todo o trabalho, mas esta troca tem de ser
+  declarada no relatório em vez de omitida.
+- **O valor da variável não está no tamanho do ganho.** É a única feature conhecida **antes** de a
+  semana começar; todas as outras são medidas na mesma semana do alvo e só servem para
+  *nowcasting*. Para a discussão de cenários futuros (Capítulo 7), é a única exógena que não exige
+  prever o futuro de outra variável.

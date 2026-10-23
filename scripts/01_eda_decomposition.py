@@ -138,7 +138,7 @@ def gerar_matriz_correlacao(df_w: pd.DataFrame) -> None:
     # Correlação de postos de Spearman (amostra total)
     corr_spearman = df_cols.corr(method="spearman")
     n_semanas = len(df_cols)
-    n_com_release = int(df_cols[colunas_release].notna().all(axis=1).sum())
+    n_com_release = int(df_cols[colunas_release].notna().sum(axis=1).eq(len(colunas_release)).sum())
 
     # Diagnóstico qualitativo de colinearidade e adequação como variável exógena.
     # Os coeficientes não se repetem no texto: estão nas colunas numéricas desta
@@ -476,7 +476,10 @@ def classificar_fase_release(semanas: float | None, positivo: bool) -> tuple[str
     merge window de um ciclo e na estabilização final do ciclo seguinte, pelo que
     uma heurística baseada no mês classifica corretamente por acidente, quando o faz.
     """
-    if pd.isna(semanas):
+    # `pd.isna` é escalar aqui, mas o tipo devolvido é `bool | NDArray | NDFrame`;
+    # o `bool(...)` torna a checagem explícita para o verificador de tipos e mantém
+    # a tolerância a `pd.NA` caso a coluna passe a ser Int64 nullable.
+    if semanas is None or bool(pd.isna(semanas)):
         return FASE_SEM_RELEASE, "Sem release de referência (início da série)"
 
     if semanas <= 1:

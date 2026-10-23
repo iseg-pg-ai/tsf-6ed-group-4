@@ -204,8 +204,11 @@ def criar_correlogramas_fac_facp(train: pd.DataFrame) -> dict[str, object]:
 
     # Diagnóstico do correlograma da série diferenciada: quais os desfasamentos
     # que excedem a banda de confiança e se existe pico no desfasamento anual.
-    valores_acf = acf(y_diff, nlags=60, fft=False)
-    valores_acf_niveis = acf(y_niveis, nlags=60, fft=False)
+    # `acf` devolve um ndarray porque `qstat` e `alpha` ficam por omissão, mas os stubs
+    # declaram também hipóteses de tuplo: converte-se explicitamente para ndarray para
+    # que indexar um desfasamento não seja lido como acesso a um campo de tuplo.
+    valores_acf = np.asarray(acf(y_diff, nlags=60, fft=False), dtype=float)
+    valores_acf_niveis = np.asarray(acf(y_niveis, nlags=60, fft=False), dtype=float)
     banda_acf = 1.96 / np.sqrt(len(y_diff))
     lags_significativos = [lag for lag in range(1, 61) if abs(valores_acf[lag]) > banda_acf]
     lag_pico = max(range(1, 61), key=lambda lag: abs(valores_acf[lag]))
@@ -990,7 +993,10 @@ def exportar_resumo_econometria(
     # Tamanhos de amostra: a comparação entre especificações só é válida porque todas
     # são estimadas nas mesmas observações (ver modelar_arima_arimax).
     n_treino = len(train)
-    n_treino_bj = int(train["fase_rc_inicial"].notna().sum())
+    # `.notna().sum()` devolve um escalar cujo tipo os stubs não reduzem a int (e
+    # `.count()` resolve para `int | Series` conforme o overload), pelo que a contagem
+    # é feita em numpy, que é explicitamente numérica.
+    n_treino_bj = int(np.count_nonzero(train["fase_rc_inicial"].notna().to_numpy()))
     n_teste = len(test)
 
     if lags_rejeitam:

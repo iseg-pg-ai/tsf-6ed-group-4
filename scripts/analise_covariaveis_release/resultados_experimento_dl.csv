@@ -1,0 +1,5 @@
+Features,F,REQM media,REQM dp,EAM media,EAM dp,EPAM media,EPAM dp,EPAMs media,EPAMs dp
+F=6 sem release,6,130.29,0.17,79.88,0.47,61.71,1.61,37.47,0.26
+F=7 so weeks_since_release,7,130.35,0.2,80.33,0.31,63.74,1.43,37.53,0.04
+F=8 weeks + is_merge_window,8,128.8,0.17,78.72,0.4,60.29,1.05,37.45,0.46
+F=8 duas dummies (adotado),8,127.56,0.18,78.37,0.65,64.8,2.0,36.91,0.28
